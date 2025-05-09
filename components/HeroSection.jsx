@@ -1,13 +1,18 @@
 'use client'
+import { useTheme } from "next-themes";
 import React from "react";
 
+
+
 export default function HeroSection() {
+    const { theme } = useTheme();
+    const bgImage = theme === "dark" ? "/hero-bg.png" : "/hero-bg-lt.png";
   return (
     <section className="w-full bg-background h-screen text-foreground py-20 px-6 md:px-12"
-    style={{ backgroundImage: "url('/hero-bg.png')" }}>
+    style={{ backgroundImage: `url(${bgImage})`}}>
       <div className="max-w-7xl mx-auto px-6 py-20 grid md:grid-cols-2 items-center gap-12">
         {/* Left Content */}
-        <div className="bg-black/30 rounded-xl shadow-xl px-10 py-5">
+        <div className="bg-black dark:bg-black/30 rounded-xl shadow-xl px-10 py-5">
             <h1 className="text-white font-bold text-5xl md:text-6xl font-mono leading-tight">
             Code. Connect. <br />
             Create. Live.

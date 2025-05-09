@@ -9,7 +9,7 @@ function Navbar() {
   const isDark = theme === 'dark'
 
   return (
-    <section className="bg-gray-100 dark:bg-[#353536] text-black dark:text-white h-[80px] transition-colors duration-300">
+    <section className="bg-gray-100 fixed w-full z-50 dark:bg-[#353536] text-black dark:text-white h-[80px] transition-colors duration-300">
       <div className="flex p-2 justify-between items-center h-full">
         <div className="flex gap-10">
           <h1>LOGO</h1>
