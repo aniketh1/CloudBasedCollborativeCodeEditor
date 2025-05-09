@@ -49,7 +49,7 @@ export default function FeaturesSection() {
         {/* Content Layer */}
         <div className="relative z-10 max-w-6xl mx-auto text-center">
            
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+            <h2 className="text-3xl sm:text-5xl font-bold mb-4">
             Collab Dev IDE Features
             </h2>
             <p className="text-gray-300 mb-12 max-w-2xl mx-auto">
@@ -58,7 +58,7 @@ export default function FeaturesSection() {
         
 
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-14">
           {features.map((feature, idx) => (
             <FeatureCard
               key={idx}
