@@ -4,7 +4,7 @@ import { Github, Twitter, Linkedin } from 'lucide-react';
 
 export default function Footer() {
   return (
-    <footer className="bg-gray-100 dark:bg-[#1e1e1e] text-gray-800 dark:text-gray-300 px-6 py-12 mt-24 border-t border-gray-300 dark:border-gray-700 transition-colors">
+    <footer className="bg-gray-100 dark:bg-[#1e1e1e] text-gray-800 dark:text-gray-300 px-6 py-12  border-t border-gray-300 dark:border-gray-700 transition-colors">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
         
         {/* Logo + Description */}

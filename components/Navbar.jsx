@@ -2,6 +2,8 @@
 import React from 'react'
 import { useTheme } from 'next-themes'
 import { Sun, Moon } from 'lucide-react' // You can swap icons
+import { SignInButton, SignUpButton, UserButton, SignedIn, SignedOut } from '@clerk/nextjs';
+import { Button } from './ui/button'
 
 function Navbar() {
   const { theme, setTheme } = useTheme()
@@ -19,12 +21,25 @@ function Navbar() {
         </div>
 
         <div className="flex gap-7 mr-10 items-center">
-          {['Home', 'About', 'Features', 'Contact'].map((item) => (
+          {['Home', 'About', 'Features'].map((item) => (
             <p key={item} className="bg-[#2FA1FF] w-[120px] text-center font-bold p-2 rounded-lg text-white cursor-pointer">
               {item}
             </p>
           ))}
+         {/* Authentication using clerk */}
+         <SignedOut>
+            <SignInButton>
+              <Button className="bg-[#2FA1FF]">
+                Login
+              </Button>
+            </SignInButton>
+          </SignedOut>
 
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+
+          
           {/* Theme Toggle Styled Like Other Buttons */}
           <button
             onClick={() => setTheme(isDark ? 'light' : 'dark')}

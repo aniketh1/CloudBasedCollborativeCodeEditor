@@ -12,7 +12,6 @@ export default function Home() {
       <FeaturesSection />
       <Companion />
       <Footer />
-      <p>This is cold CICD of the Collab Dev</p>
     </>
   );
 }
