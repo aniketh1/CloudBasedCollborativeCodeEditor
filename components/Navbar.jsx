@@ -2,8 +2,9 @@
 import React from 'react'
 import { useTheme } from 'next-themes'
 import { Sun, Moon } from 'lucide-react' // You can swap icons
-import { SignInButton, SignUpButton, UserButton, SignedIn, SignedOut } from '@clerk/nextjs';
+import { UserButton, SignedIn, SignedOut } from '@clerk/nextjs';
 import { Button } from './ui/button'
+import Link from 'next/link';
 
 function Navbar() {
   const { theme, setTheme } = useTheme()
@@ -26,26 +27,23 @@ function Navbar() {
               {item}
             </p>
           ))}
-         {/* Authentication using clerk */}
-         <SignedOut>
-            <SignInButton>
-              <Button className="bg-[#2FA1FF]">
-                Login
-              </Button>
-            </SignInButton>
+          {/* Authentication using clerk */}
+          <SignedOut>
+            <Link href="/sign-in">
+              <Button className='bg-[#2FA1FF] w-[120px] text-center font-bold p-2 rounded-lg text-white cursor-pointer'>SignIn</Button>
+            </Link>
           </SignedOut>
 
           <SignedIn>
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
 
-          
+
           {/* Theme Toggle Styled Like Other Buttons */}
           <button
             onClick={() => setTheme(isDark ? 'light' : 'dark')}
-            className={`w-[50px] h-[45px] flex items-center justify-center rounded-lg font-bold text-white cursor-pointer transition-colors duration-300 ${
-              isDark ? 'bg-yellow-500' : 'bg-[#2FA1FF]'
-            }`}
+            className={`w-[50px] h-[45px] flex items-center justify-center rounded-lg font-bold text-white cursor-pointer transition-colors duration-300 ${isDark ? 'bg-yellow-500' : 'bg-[#2FA1FF]'
+              }`}
           >
             {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
