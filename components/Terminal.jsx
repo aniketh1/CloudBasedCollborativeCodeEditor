@@ -1,23 +1,41 @@
+// components/Terminal.jsx
 'use client';
 
-import { Terminal } from 'react-terminal';
+import { useEffect, useRef, useState } from 'react';
+import { Terminal } from '@xterm/xterm';
+import '@xterm/xterm/css/xterm.css';
 
-const commands = {
-  help: 'Available commands: npm run dev, clear, ls',
-  ls: '📁 src  📁 public  📄 package.json',
-  'npm run dev': '🚀 Starting development server on http://localhost:3000...',
-  clear: () => '',
-};
+export default function XtermTerminal() {
+  const terminalRef = useRef(null);
+  const [term, setTerm] = useState(null);
 
-export default function SimulatedTerminal() {
+  useEffect(() => {
+    const xterm = new Terminal({
+      theme: {
+        background: '#000000',
+        foreground: '#00ff00',
+      },
+      fontSize: 14,
+      cursorBlink: true,
+    });
+
+    if (terminalRef.current) {
+      xterm.open(terminalRef.current);
+      xterm.write('Welcome to Collab Dev Terminal\r\n');
+      xterm.write('$ ');
+      setTerm(xterm);
+    }
+
+    return () => {
+      xterm?.dispose();
+    };
+  }, []);
+
   return (
-    <div className="bg-black rounded-lg overflow-hidden text-white h-60">
-      <Terminal
-        color="green"
-        prompt="dev@collab-dev:"
-        commands={commands}
-        welcomeMessage={`Type "help" to get started.`}
-      />
-    </div>
+    <div
+      ref={terminalRef}
+      className="bg-black text-white"
+      style={{ height: '200px', width: '100%' }}
+    />
   );
 }
