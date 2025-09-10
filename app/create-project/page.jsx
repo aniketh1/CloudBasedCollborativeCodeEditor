@@ -28,7 +28,8 @@ export default function CreateProjectPage() {
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/projects/templates');
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${BACKEND_URL}/api/projects/templates`);
         const data = await response.json();
         
         if (data.success) {
@@ -121,7 +122,8 @@ export default function CreateProjectPage() {
     console.log('🚀 Creating project with data:', formData);
 
     try {
-      const response = await fetch('http://localhost:3001/api/projects', {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
