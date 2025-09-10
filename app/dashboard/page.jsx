@@ -21,7 +21,8 @@ export default function DashboardPage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/projects?userId=mock-user-id');
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/projects?userId=mock-user-id`);
       const data = await response.json();
       
       if (data.success) {
