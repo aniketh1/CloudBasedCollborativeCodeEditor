@@ -22,7 +22,8 @@ export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
     setError('');
     
     try {
-      const response = await fetch(`http://localhost:3001/api/filesystem/browse?path=${encodeURIComponent(path)}`);
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/filesystem/browse?path=${encodeURIComponent(path)}`);
       const data = await response.json();
       
       if (data.success) {

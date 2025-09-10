@@ -13,7 +13,8 @@ export default function XtermTerminal() {
   useEffect(() => {
     if (!terminalRef.current) return;
 
-    socket.current = io('http://localhost:3001');
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    socket.current = io(BACKEND_URL);
 
     term.current = new Terminal({
       theme: {
