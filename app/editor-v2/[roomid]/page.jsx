@@ -32,7 +32,8 @@ export default function EditorPageV2() {
 
     console.log('🚀 V2: Initializing connection for room:', roomId);
 
-    const newSocket = io('http://localhost:3001', {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    const newSocket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
       timeout: 5000,
     });
