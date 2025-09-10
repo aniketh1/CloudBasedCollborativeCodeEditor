@@ -8,9 +8,8 @@ import { FileText, Folder, FolderOpen, Play, Save, Users, Terminal as TerminalIc
 
 // Dynamic imports for client-side components
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
-const XTermWrapper = dynamic(() => import('./XTermWrapper_test'), { ssr: false });
 
-export default function EditorPage() {
+export default function EditorPageV2() {
   const params = useParams();
   const roomId = params?.roomid;
   
@@ -20,12 +19,8 @@ export default function EditorPage() {
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [code, setCode] = useState('// Welcome to CodeDev\n// Select a file to start editing...');
+  const [code, setCode] = useState('// Welcome to CodeDev V2\n// Select a file to start editing...');
   const [expandedFolders, setExpandedFolders] = useState(new Set());
-  const [showTerminal, setShowTerminal] = useState(true);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isProjectLoaded, setIsProjectLoaded] = useState(false);
   
   // Refs to prevent re-connections
   const socketRef = useRef(null);
@@ -35,7 +30,7 @@ export default function EditorPage() {
   useEffect(() => {
     if (!roomId || socketRef.current) return;
 
-    console.log('🚀 Initializing connection for room:', roomId);
+    console.log('🚀 V2: Initializing connection for room:', roomId);
 
     const newSocket = io('http://localhost:3001', {
       transports: ['websocket', 'polling'],
@@ -48,66 +43,48 @@ export default function EditorPage() {
     // Connection events
     newSocket.on('connect', () => {
       if (!mountedRef.current) return;
-      console.log('✅ Connected to server');
+      console.log('✅ V2: Connected to server');
       setIsConnected(true);
       newSocket.emit('join-room', roomId);
     });
 
     newSocket.on('disconnect', () => {
       if (!mountedRef.current) return;
-      console.log('❌ Disconnected from server');
+      console.log('❌ V2: Disconnected from server');
       setIsConnected(false);
     });
 
     // Project data events
     newSocket.on('project-loaded', (data) => {
       if (!mountedRef.current) return;
-      console.log('📂 Project loaded:', data);
+      console.log('📂 V2: Project loaded:', data);
       setProject(data.project);
       setFiles(data.files || []);
-      setIsProjectLoaded(true); // Mark project as loaded
       
-      // Auto-expand folders that have content (recursive)
+      // Auto-expand first level folders
       if (data.files && data.files.length > 0) {
         const foldersToExpand = new Set();
-        
-        const expandFoldersWithContent = (items) => {
-          items.forEach(item => {
-            if (item.type === 'folder' && item.children && item.children.length > 0) {
-              foldersToExpand.add(item.path);
-              // Recursively expand nested folders
-              expandFoldersWithContent(item.children);
-            }
-          });
-        };
-        
-        expandFoldersWithContent(data.files);
+        data.files.forEach(item => {
+          if (item.type === 'folder') {
+            foldersToExpand.add(item.path);
+          }
+        });
         setExpandedFolders(foldersToExpand);
-        console.log('📁 Auto-expanded folders:', Array.from(foldersToExpand));
       }
     });
 
     // File content events
     newSocket.on('file-content', (data) => {
       if (!mountedRef.current) return;
-      console.log('📄 File content received:', data.path);
+      console.log('📄 V2: File content received:', data.path);
       setCode(data.content);
       setSelectedFile(data.path);
-      setHasUnsavedChanges(false); // Reset unsaved changes when loading new file
-    });
-
-    // File save confirmation
-    newSocket.on('file-saved', (data) => {
-      if (!mountedRef.current) return;
-      console.log('💾 File saved successfully:', data.path);
-      setHasUnsavedChanges(false);
-      setIsSaving(false);
     });
 
     // Folder expansion events
     newSocket.on('folder-content', (data) => {
       if (!mountedRef.current) return;
-      console.log('📁 Folder content received:', data.path, data.children);
+      console.log('📁 V2: Folder content received:', data.path, data.children);
       
       // Update the files array with the expanded folder's children
       setFiles(prevFiles => {
@@ -128,58 +105,24 @@ export default function EditorPage() {
     // Error handlers
     newSocket.on('file-error', (data) => {
       if (!mountedRef.current) return;
-      console.error('📄 File error:', data.error);
+      console.error('📄 V2: File error:', data.error);
     });
 
     newSocket.on('folder-error', (data) => {
       if (!mountedRef.current) return;
-      console.error('📁 Folder error:', data.error);
+      console.error('📁 V2: Folder error:', data.error);
     });
 
     // Cleanup
     return () => {
       mountedRef.current = false;
       if (newSocket) {
-        console.log('🧹 Cleaning up socket');
+        console.log('🧹 V2: Cleaning up socket');
         newSocket.disconnect();
       }
       socketRef.current = null;
     };
   }, [roomId]);
-
-  // Save function
-  const handleSave = async () => {
-    if (!socket || !isConnected || !selectedFile || !hasUnsavedChanges || isSaving) {
-      return;
-    }
-
-    setIsSaving(true);
-    console.log('💾 Saving file:', selectedFile);
-    
-    try {
-      socket.emit('write-file', {
-        roomId,
-        filePath: selectedFile,
-        content: code
-      });
-    } catch (error) {
-      console.error('❌ Save error:', error);
-      setIsSaving(false);
-    }
-  };
-
-  // Keyboard shortcut for save (Ctrl+S)
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.ctrlKey && event.key === 's') {
-        event.preventDefault();
-        handleSave();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedFile, hasUnsavedChanges, isSaving, socket, isConnected, code, roomId]);
 
   // File tree rendering
   const renderFileTree = (items, level = 0) => {
@@ -205,7 +148,7 @@ export default function EditorPage() {
                   newExpanded.add(item.path);
                   // Load folder contents if not already loaded
                   if (socket && isConnected && (!item.children || item.children.length === 0)) {
-                    console.log('📁 Requesting folder:', item.path);
+                    console.log('📁 V2: Requesting folder:', item.path);
                     socket.emit('read-folder', { roomId, folderPath: item.path });
                   }
                 }
@@ -232,19 +175,14 @@ export default function EditorPage() {
             }`}
             onClick={() => {
               if (socket && isConnected) {
-                console.log('📄 Requesting file:', item.path);
+                console.log('📄 V2: Requesting file:', item.path);
                 setSelectedFile(item.path);
                 socket.emit('read-file', { roomId, filePath: item.path });
               }
             }}
           >
             <FileText className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-300">
-              {item.name}
-              {selectedFile === item.path && hasUnsavedChanges && (
-                <span className="text-orange-400 ml-1">*</span>
-              )}
-            </span>
+            <span className="text-gray-300">{item.name}</span>
           </div>
         )}
       </div>
@@ -256,45 +194,16 @@ export default function EditorPage() {
       {/* Header */}
       <div className="h-12 bg-[#161b22] border-b border-gray-800 flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-white">CodeDev</h1>
+          <h1 className="text-lg font-semibold text-white">CodeDev V2</h1>
           {project && (
             <span className="text-sm text-gray-400">• {project.name}</span>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          {/* Save Button */}
-          {selectedFile && (
-            <button
-              onClick={handleSave}
-              disabled={!hasUnsavedChanges || isSaving}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors ${
-                hasUnsavedChanges && !isSaving
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-              }`}
-              title={`Save ${selectedFile} (Ctrl+S)`}
-            >
-              <Save className="w-4 h-4" />
-              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save' : 'Saved'}
-            </button>
-          )}
-          
-          {/* Terminal Toggle */}
-          <button
-            onClick={() => setShowTerminal(!showTerminal)}
-            className={`p-2 rounded hover:bg-gray-700 ${showTerminal ? 'text-blue-400' : 'text-gray-400'}`}
-            title="Toggle Terminal"
-          >
-            <TerminalIcon className="w-4 h-4" />
-          </button>
-          
-          {/* Connection Status */}
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-gray-400">
-              {isConnected ? 'Connected' : 'Disconnected'}
-            </span>
-          </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="text-sm text-gray-400">
+            {isConnected ? 'Connected' : 'Disconnected'}
+          </span>
         </div>
       </div>
 
@@ -312,7 +221,7 @@ export default function EditorPage() {
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Editor */}
-          <div className={`${showTerminal ? 'flex-1' : 'h-full'}`}>
+          <div className="flex-1">
             {selectedFile ? (
               <MonacoEditor
                 height="100%"
@@ -321,7 +230,7 @@ export default function EditorPage() {
                 value={code}
                 onChange={(value) => {
                   setCode(value || '');
-                  setHasUnsavedChanges(true); // Mark as unsaved when content changes
+                  // Auto-save could be implemented here
                 }}
                 options={{
                   minimap: { enabled: false },
@@ -336,7 +245,7 @@ export default function EditorPage() {
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">Welcome to CodeDev</p>
+                  <p className="text-lg font-medium mb-2">Welcome to CodeDev V2</p>
                   <p>Select a file from the explorer to start editing</p>
                   {project && (
                     <p className="text-sm text-gray-400 mt-2">
@@ -348,37 +257,22 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Terminal */}
-          {showTerminal && (
-            <div className="h-64 bg-[#0d1117] border-t border-gray-800">
-              <div className="h-8 bg-[#161b22] border-b border-gray-800 flex items-center justify-between px-3">
-                <div className="flex items-center">
-                  <TerminalIcon className="w-4 h-4 mr-2 text-gray-400" />
-                  <span className="text-xs text-gray-400 uppercase tracking-wider">Terminal</span>
-                </div>
-                <button
-                  onClick={() => setShowTerminal(false)}
-                  className="text-gray-400 hover:text-white text-xs px-2 py-1 rounded hover:bg-gray-700"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="h-[calc(100%-2rem)]">
-                {socket && isConnected ? (
-                  <XTermWrapper 
-                    socket={socket} 
-                    roomId={roomId} 
-                    isConnected={isConnected}
-                    isProjectLoaded={isProjectLoaded}
-                  />
-                ) : (
-                  <div className="p-4 text-gray-400 text-sm">
-                    Connecting to terminal...
-                  </div>
-                )}
-              </div>
+          {/* Simple Terminal Placeholder */}
+          <div className="h-48 bg-[#0d1117] border-t border-gray-800">
+            <div className="h-8 bg-[#161b22] border-b border-gray-800 flex items-center px-3">
+              <TerminalIcon className="w-4 h-4 mr-2 text-gray-400" />
+              <span className="text-xs text-gray-400 uppercase tracking-wider">Terminal</span>
             </div>
-          )}
+            <div className="p-4 text-green-400 font-mono text-sm">
+              <div>CodeDev V2 Terminal</div>
+              <div className="text-gray-500">Terminal integration coming soon...</div>
+              {project && (
+                <div className="text-gray-400 mt-2">
+                  Working directory: {project.localPath}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

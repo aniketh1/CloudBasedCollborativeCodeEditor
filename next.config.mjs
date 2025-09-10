@@ -1,10 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: true,
+    serverActions: {
+      allowedOrigins: ['localhost:3000']
+    },
   },
 
-    reactStrictMode: true,
+    reactStrictMode: false, // Temporarily disabled to prevent double useEffect execution
     webpack(config, { isServer }) {
       if (!isServer) {
         // Disable Webpack caching for production build
