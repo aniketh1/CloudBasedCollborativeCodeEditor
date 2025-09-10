@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { FolderOpen, Folder, HardDrive, ArrowLeft, Home, X } from 'lucide-react';
+import { FolderOpen, Folder, HardDrive, ArrowLeft, Home, X, Upload, FileText } from 'lucide-react';
 
 export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
   const [currentPath, setCurrentPath] = useState('');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -29,6 +31,9 @@ export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
       if (data.success) {
         setCurrentPath(data.currentPath);
         setItems(data.items);
+        if (data.message) {
+          console.log('📁 Workspace info:', data.message);
+        }
       } else {
         setError(data.error || 'Failed to load directory');
       }
@@ -53,12 +58,83 @@ export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
     }
   };
 
+  // Handle local folder upload
+  const handleFolderUpload = async (event) => {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    setError('');
+
+    try {
+      // Get project name from the first file's path
+      const projectName = files[0].webkitRelativePath.split('/')[0] || 'uploaded-project';
+      
+      // Process files
+      const fileData = await Promise.all(
+        files.map(async (file) => {
+          const content = await readFileAsBase64(file);
+          return {
+            path: file.webkitRelativePath.replace(`${projectName}/`, ''),
+            content: content.split(',')[1], // Remove data:type;base64, prefix
+            name: file.name,
+            size: file.size
+          };
+        })
+      );
+
+      // Upload to backend
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/filesystem/upload-project`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectName: projectName,
+          files: fileData
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Reload the current path to show the uploaded project
+        await loadPath('');
+        alert(`Project "${projectName}" uploaded successfully!`);
+      } else {
+        setError(result.error || 'Failed to upload project');
+      }
+    } catch (error) {
+      console.error('Error uploading project:', error);
+      setError('Failed to upload project');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Helper function to read file as base64
+  const readFileAsBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const triggerFolderUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   const getItemIcon = (item) => {
     switch (item.type) {
       case 'drive':
         return <HardDrive className="w-4 h-4 text-blue-400" />;
       case 'parent':
         return <ArrowLeft className="w-4 h-4 text-gray-400" />;
+      case 'file':
+        return <FileText className="w-4 h-4 text-green-400" />;
       default:
         return <Folder className="w-4 h-4 text-yellow-500" />;
     }
@@ -75,22 +151,46 @@ export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
             <FolderOpen className="w-5 h-5 text-[#00ff88]" />
             <h2 className="text-lg font-semibold text-white">Select Project Folder</h2>
           </div>
-          <Button
-            onClick={onClose}
-            variant="ghost"
-            size="sm"
-            className="text-gray-400 hover:text-white"
-          >
-            <X className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={triggerFolderUpload}
+              disabled={isUploading}
+              variant="outline"
+              size="sm"
+              className="border-[#00ff88] text-[#00ff88] hover:bg-[#00ff88] hover:text-black"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {isUploading ? 'Uploading...' : 'Upload Folder'}
+            </Button>
+            <Button
+              onClick={onClose}
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
+
+        {/* Hidden file input for folder upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          webkitdirectory=""
+          directory=""
+          multiple
+          style={{ display: 'none' }}
+          onChange={handleFolderUpload}
+          accept="*"
+        />
 
         {/* Current Path */}
         <div className="p-4 border-b border-gray-800 bg-[#1a1a2e]">
           <div className="flex items-center gap-2 text-sm">
             <Home className="w-4 h-4 text-gray-400" />
             <span className="text-gray-300">
-              {currentPath || 'Select a location'}
+              {currentPath || 'Workspace - Upload local folders or browse existing projects'}
             </span>
           </div>
         </div>
@@ -129,10 +229,20 @@ export default function FolderBrowser({ isOpen, onClose, onSelectFolder }) {
                 </button>
               ))}
               
-              {items.length === 0 && (
+              {items.length === 0 && !loading && (
                 <div className="text-center py-8 text-gray-400">
-                  <Folder className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>No folders found</p>
+                  <Upload className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p className="mb-2">No projects found in workspace</p>
+                  <p className="text-sm mb-4">Upload a local folder to get started</p>
+                  <Button
+                    onClick={triggerFolderUpload}
+                    disabled={isUploading}
+                    variant="outline"
+                    className="border-[#00ff88] text-[#00ff88] hover:bg-[#00ff88] hover:text-black"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Local Folder
+                  </Button>
                 </div>
               )}
             </div>
