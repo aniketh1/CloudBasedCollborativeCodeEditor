@@ -14,17 +14,44 @@ export default function CreateProjectPage() {
     name: '',
     description: '',
     localPath: '',
-    projectType: 'general'
+    projectType: 'react'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [directoryHandle, setDirectoryHandle] = useState(null);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [projectTypes, setProjectTypes] = useState([
-    { value: 'general', name: 'General Project', description: 'Basic project setup', icon: FileText }
+    { 
+      value: 'react', 
+      name: 'React App', 
+      description: 'Interactive React components with modern styling and animations',
+      features: ['Component library', 'State management', 'Modern CSS', 'Responsive design'],
+      icon: Code 
+    },
+    { 
+      value: 'nodejs', 
+      name: 'Node.js API', 
+      description: 'Express.js REST API with full CRUD operations and middleware',
+      features: ['Express.js setup', 'RESTful routes', 'Error handling', 'CORS enabled'],
+      icon: Terminal 
+    },
+    { 
+      value: 'html', 
+      name: 'HTML Website', 
+      description: 'Responsive website with smooth animations and modern design',
+      features: ['Responsive layout', 'CSS animations', 'Clean design', 'Interactive elements'],
+      icon: FileText 
+    },
+    { 
+      value: 'python', 
+      name: 'Python Flask', 
+      description: 'RESTful API with Flask, error handling, and JSON responses',
+      features: ['Flask framework', 'API endpoints', 'Error handling', 'JSON responses'],
+      icon: Code 
+    }
   ]);
 
-  // Fetch available project templates from backend
+  // Fetch available project templates from backend (if any additional ones exist)
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
@@ -32,18 +59,21 @@ export default function CreateProjectPage() {
         const response = await fetch(`${BACKEND_URL}/api/projects/templates`);
         const data = await response.json();
         
-        if (data.success) {
-          const typesWithIcons = [
-            { value: 'general', name: 'General Project', description: 'Basic project setup', icon: FileText },
-            ...data.templates.map(template => ({
-              ...template,
-              icon: getIconForType(template.value)
-            }))
-          ];
-          setProjectTypes(typesWithIcons);
+        if (data.success && data.templates && data.templates.length > 0) {
+          // Add any additional templates from backend
+          const backendTemplates = data.templates.filter(
+            template => !['react', 'nodejs', 'html', 'python'].includes(template.value)
+          ).map(template => ({
+            ...template,
+            icon: getIconForType(template.value)
+          }));
+          
+          if (backendTemplates.length > 0) {
+            setProjectTypes(prev => [...prev, ...backendTemplates]);
+          }
         }
       } catch (error) {
-        console.error('Error fetching templates:', error);
+        console.error('Error fetching additional templates:', error);
       }
     };
 
@@ -201,29 +231,82 @@ export default function CreateProjectPage() {
               <label className="block text-sm font-medium mb-2">
                 Project Type
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {projectTypes.map((type) => {
                   const IconComponent = type.icon;
+                  const isSelected = formData.projectType === type.value;
                   return (
                     <button
                       key={type.value}
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, projectType: type.value }))}
-                      className={`p-3 rounded-lg border transition-colors flex flex-col items-center gap-2 ${
-                        formData.projectType === type.value
-                          ? 'border-[#00ff88] bg-[#00ff88]/10 text-[#00ff88]'
-                          : 'border-gray-700 bg-[#1a1a2e] text-gray-400 hover:border-gray-600'
+                      className={`p-4 rounded-lg border transition-all duration-200 text-left ${
+                        isSelected
+                          ? 'border-[#00ff88] bg-[#00ff88]/10 shadow-lg shadow-[#00ff88]/20'
+                          : 'border-gray-700 bg-[#1a1a2e] hover:border-gray-600 hover:bg-[#1a1a2e]/80'
                       }`}
                     >
-                      <IconComponent className="w-5 h-5" />
-                      <span className="text-xs text-center">{type.name}</span>
-                      {type.description && (
-                        <span className="text-xs text-gray-500 text-center">{type.description}</span>
-                      )}
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2 rounded-md ${
+                          isSelected ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-gray-700 text-gray-400'
+                        }`}>
+                          <IconComponent className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <h3 className={`font-semibold text-sm ${
+                            isSelected ? 'text-[#00ff88]' : 'text-white'
+                          }`}>
+                            {type.name}
+                          </h3>
+                          <p className="text-xs text-gray-400 mt-1 mb-2">
+                            {type.description}
+                          </p>
+                          {type.features && (
+                            <div className="flex flex-wrap gap-1">
+                              {type.features.slice(0, 2).map((feature, index) => (
+                                <span
+                                  key={index}
+                                  className={`text-xs px-2 py-1 rounded-full ${
+                                    isSelected 
+                                      ? 'bg-[#00ff88]/20 text-[#00ff88]' 
+                                      : 'bg-gray-700 text-gray-300'
+                                  }`}
+                                >
+                                  {feature}
+                                </span>
+                              ))}
+                              {type.features.length > 2 && (
+                                <span className="text-xs text-gray-500">
+                                  +{type.features.length - 2} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
               </div>
+              
+              {/* Show selected template details */}
+              {formData.projectType && projectTypes.find(t => t.value === formData.projectType)?.features && (
+                <div className="mt-4 p-4 bg-[#1a1a2e] rounded-lg border border-gray-700">
+                  <h4 className="text-sm font-medium text-[#00ff88] mb-2">
+                    {projectTypes.find(t => t.value === formData.projectType)?.name} Features:
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {projectTypes.find(t => t.value === formData.projectType)?.features.map((feature, index) => (
+                      <span
+                        key={index}
+                        className="text-xs px-2 py-1 bg-[#00ff88]/10 text-[#00ff88] rounded-full border border-[#00ff88]/30"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Local Folder Path */}
