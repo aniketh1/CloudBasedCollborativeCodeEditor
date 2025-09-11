@@ -817,15 +817,13 @@ export default function EditorPage() {
                 onChange={(value) => {
                   handleCodeChange(value || '');
                 }}
-                onMount={(editor) => {
+                onMount={(editor, monaco) => {
                   editorRef.current = editor;
                   
-                  // Add custom keybindings
-                  editor.addCommand(
-                    editor.createContextKey('alwaysTrue', true),
-                    () => handleSave(),
-                    'ctrl+s'
-                  );
+                  // Add custom keybindings using correct Monaco API
+                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+                    handleSave();
+                  });
                   
                   // Track cursor position changes for collaboration
                   editor.onDidChangeCursorPosition((e) => {

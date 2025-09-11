@@ -111,15 +111,23 @@ export default function CreateProjectPage() {
 
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      
+      // Prepare request data without localPath
+      const requestData = {
+        name: formData.name,
+        description: formData.description,
+        projectType: formData.projectType,
+        userId: 'mock-user-id' // Replace with actual user ID when auth is implemented
+      };
+      
+      console.log('🚀 Creating project with cleaned data:', requestData);
+      
       const response = await fetch(`${BACKEND_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          userId: 'mock-user-id' // Replace with actual user ID when auth is implemented
-        }),
+        body: JSON.stringify(requestData),
       });
 
       const data = await response.json();
@@ -278,7 +286,7 @@ export default function CreateProjectPage() {
             <div className="flex gap-4">
               <Button
                 type="submit"
-                disabled={loading || !formData.name || !formData.localPath}
+                disabled={loading || !formData.name}
                 className="bg-[#00ff88] text-black hover:bg-[#00ff88]/90 flex-1"
               >
                 {loading ? (
