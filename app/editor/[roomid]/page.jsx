@@ -48,10 +48,22 @@ export default function EditorPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState('javascript');
   
+  // Collaboration state
+  const [roomUsers, setRoomUsers] = useState([]);
+  const [userCursors, setUserCursors] = useState(new Map());
+  const [typingUsers, setTypingUsers] = useState(new Set());
+  const [currentUser] = useState({
+    id: `user-${Math.random().toString(36).substr(2, 9)}`,
+    name: `User${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+    avatar: null
+  });
+  const [showUserList, setShowUserList] = useState(true);
+  
   // Refs to prevent re-connections
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
   const editorRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   // Language detection based on file extension
   const getLanguageFromFileName = (fileName) => {
@@ -302,6 +314,90 @@ export default function EditorPage() {
       console.error('📁 Folder error:', data.error);
     });
 
+    // Enhanced collaboration events
+    newSocket.on('room-users', (users) => {
+      if (!mountedRef.current) return;
+      console.log('👥 Room users updated:', users);
+      setRoomUsers(users.filter(user => user.id !== currentUser.id));
+    });
+
+    newSocket.on('user-joined', (userData) => {
+      if (!mountedRef.current) return;
+      console.log('👋 User joined:', userData);
+      if (userData.id !== currentUser.id) {
+        setRoomUsers(prev => [...prev.filter(user => user.id !== userData.id), userData]);
+      }
+    });
+
+    newSocket.on('user-left', ({ userId }) => {
+      if (!mountedRef.current) return;
+      console.log('👋 User left:', userId);
+      setRoomUsers(prev => prev.filter(user => user.id !== userId));
+      setUserCursors(prev => {
+        const newCursors = new Map(prev);
+        newCursors.delete(userId);
+        return newCursors;
+      });
+      setTypingUsers(prev => {
+        const newTyping = new Set(prev);
+        newTyping.delete(userId);
+        return newTyping;
+      });
+    });
+
+    newSocket.on('cursor-update', (cursorData) => {
+      if (!mountedRef.current) return;
+      if (cursorData.userId !== currentUser.id && cursorData.filePath === selectedFile) {
+        setUserCursors(prev => new Map(prev).set(cursorData.userId, cursorData));
+      }
+    });
+
+    newSocket.on('code-operation', (operationData) => {
+      if (!mountedRef.current) return;
+      if (operationData.userId !== currentUser.id && operationData.filePath === selectedFile) {
+        console.log('🔄 Received code operation:', operationData);
+        // Apply the operation to the current code
+        setCode(operationData.content);
+        setHasUnsavedChanges(true);
+      }
+    });
+
+    newSocket.on('user-typing', ({ userId, filePath, isTyping }) => {
+      if (!mountedRef.current) return;
+      if (userId !== currentUser.id && filePath === selectedFile) {
+        setTypingUsers(prev => {
+          const newTyping = new Set(prev);
+          if (isTyping) {
+            newTyping.add(userId);
+          } else {
+            newTyping.delete(userId);
+          }
+          return newTyping;
+        });
+      }
+    });
+
+    newSocket.on('user-file-selected', ({ userId, filePath }) => {
+      if (!mountedRef.current) return;
+      console.log(`📄 ${userId} selected file: ${filePath}`);
+      // Update user presence indicator
+    });
+
+    newSocket.on('user-status-changed', ({ userId, isActive }) => {
+      if (!mountedRef.current) return;
+      setRoomUsers(prev => prev.map(user => 
+        user.id === userId ? { ...user, isActive } : user
+      ));
+    });
+
+    // Send user join event
+    newSocket.emit('user-join', {
+      roomId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar
+    });
+
     // Cleanup
     return () => {
       mountedRef.current = false;
@@ -331,6 +427,73 @@ export default function EditorPage() {
     } catch (error) {
       console.error('❌ Save error:', error);
       setIsSaving(false);
+    }
+  };
+
+  // Collaboration helper functions
+  const handleCursorPositionChange = (position, selection) => {
+    if (socket && isConnected && selectedFile) {
+      socket.emit('cursor-position', {
+        roomId,
+        userId: currentUser.id,
+        filePath: selectedFile,
+        position,
+        selection
+      });
+    }
+  };
+
+  const handleCodeChange = (newCode, operation = 'replace') => {
+    setCode(newCode || '');
+    setHasUnsavedChanges(true);
+    
+    // Clear typing timeout and set new one
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    
+    // Send typing start indicator
+    if (socket && isConnected && selectedFile) {
+      socket.emit('typing-start', {
+        roomId,
+        userId: currentUser.id,
+        filePath: selectedFile
+      });
+      
+      // Send code operation for real-time sync
+      socket.emit('code-operation', {
+        roomId,
+        userId: currentUser.id,
+        filePath: selectedFile,
+        operation,
+        position: editorRef.current?.getPosition(),
+        content: newCode
+      });
+      
+      // Set timeout to send typing stop
+      typingTimeoutRef.current = setTimeout(() => {
+        socket.emit('typing-stop', {
+          roomId,
+          userId: currentUser.id,
+          filePath: selectedFile
+        });
+      }, 1000);
+    }
+  };
+
+  const handleFileSelect = (filePath) => {
+    setSelectedFile(filePath);
+    setCurrentLanguage(getLanguageFromFileName(filePath));
+    
+    // Notify other users about file selection
+    if (socket && isConnected) {
+      socket.emit('file-selected', {
+        roomId,
+        userId: currentUser.id,
+        filePath
+      });
+      
+      socket.emit('read-file', { roomId, filePath });
     }
   };
 
@@ -399,9 +562,7 @@ export default function EditorPage() {
             onClick={() => {
               if (socket && isConnected) {
                 console.log('📄 Requesting file:', item.path);
-                setSelectedFile(item.path);
-                setCurrentLanguage(getLanguageFromFileName(item.path));
-                socket.emit('read-file', { roomId, filePath: item.path });
+                handleFileSelect(item.path);
               }
             }}
           >
@@ -475,6 +636,66 @@ export default function EditorPage() {
           >
             <TerminalIcon className="w-4 h-4" />
           </button>
+          
+          {/* User List */}
+          <div className="relative">
+            <button
+              onClick={() => setShowUserList(!showUserList)}
+              className="flex items-center gap-2 p-2 rounded hover:bg-gray-700 text-gray-400"
+              title="Online Users"
+            >
+              <Users className="w-4 h-4" />
+              <span className="text-sm">{roomUsers.length + 1}</span>
+            </button>
+            
+            {showUserList && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-[#161b22] border border-gray-700 rounded-lg shadow-xl z-50">
+                <div className="p-3 border-b border-gray-700">
+                  <h3 className="text-sm font-semibold text-white">Online Users ({roomUsers.length + 1})</h3>
+                </div>
+                <div className="p-2 max-h-64 overflow-y-auto">
+                  {/* Current User */}
+                  <div className="flex items-center gap-2 p-2 rounded bg-[#00ff88]/10 border border-[#00ff88]/30">
+                    <div className="w-6 h-6 rounded-full bg-[#00ff88] flex items-center justify-center text-xs font-semibold text-black">
+                      {currentUser.name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-[#00ff88]">{currentUser.name} (You)</div>
+                      <div className="text-xs text-gray-400">
+                        {selectedFile ? `Editing: ${selectedFile.split('/').pop()}` : 'No file selected'}
+                      </div>
+                    </div>
+                    <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                  </div>
+                  
+                  {/* Other Users */}
+                  {roomUsers.map(user => (
+                    <div key={user.id} className="flex items-center gap-2 p-2 hover:bg-gray-800 rounded">
+                      <div 
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold text-black"
+                        style={{ backgroundColor: user.color }}
+                      >
+                        {user.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-white">{user.name}</div>
+                        <div className="text-xs text-gray-400">
+                          {typingUsers.has(user.id) ? 'Typing...' : 'Online'}
+                        </div>
+                      </div>
+                      <div className={`w-2 h-2 rounded-full ${user.isActive !== false ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                    </div>
+                  ))}
+                  
+                  {roomUsers.length === 0 && (
+                    <div className="text-center text-gray-500 text-sm py-4">
+                      You're the only one here
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* Connection Status */}
           <div className="flex items-center gap-2">
@@ -594,8 +815,7 @@ export default function EditorPage() {
                 theme={editorTheme}
                 value={code}
                 onChange={(value) => {
-                  setCode(value || '');
-                  setHasUnsavedChanges(true); // Mark as unsaved when content changes
+                  handleCodeChange(value || '');
                 }}
                 onMount={(editor) => {
                   editorRef.current = editor;
@@ -606,6 +826,36 @@ export default function EditorPage() {
                     () => handleSave(),
                     'ctrl+s'
                   );
+                  
+                  // Track cursor position changes for collaboration
+                  editor.onDidChangeCursorPosition((e) => {
+                    const position = {
+                      line: e.position.lineNumber,
+                      column: e.position.column
+                    };
+                    const selection = editor.getSelection();
+                    const selectionData = selection ? {
+                      start: { line: selection.startLineNumber, column: selection.startColumn },
+                      end: { line: selection.endLineNumber, column: selection.endColumn }
+                    } : null;
+                    
+                    handleCursorPositionChange(position, selectionData);
+                  });
+                  
+                  // Track selection changes
+                  editor.onDidChangeCursorSelection((e) => {
+                    const selection = e.selection;
+                    const selectionData = {
+                      start: { line: selection.startLineNumber, column: selection.startColumn },
+                      end: { line: selection.endLineNumber, column: selection.endColumn }
+                    };
+                    const position = {
+                      line: selection.endLineNumber,
+                      column: selection.endColumn
+                    };
+                    
+                    handleCursorPositionChange(position, selectionData);
+                  });
                   
                   // Enhanced IntelliSense for JavaScript/TypeScript
                   if (['javascript', 'typescript'].includes(currentLanguage)) {
