@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { FileText, Plus, Code, Terminal } from 'lucide-react';
+import { FileText, Plus, Code, Terminal, FolderOpen } from 'lucide-react';
 
 export default function CreateProjectPage() {
   const router = useRouter();
