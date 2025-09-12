@@ -5,21 +5,19 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { FolderOpen, Plus, Code, Terminal, FileText } from 'lucide-react';
-import FolderBrowser from '@/components/FolderBrowser';
+import { FileText, Plus, Code, Terminal, FolderOpen } from 'lucide-react';
+// import FolderBrowser from '@/components/FolderBrowser'; // Removed - no longer needed
 
 export default function CreateProjectPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    localPath: '',
     projectType: 'react'
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [directoryHandle, setDirectoryHandle] = useState(null);
-  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  // const [showFolderBrowser, setShowFolderBrowser] = useState(false); // Removed - no longer needed
   const [projectTypes, setProjectTypes] = useState([
     { 
       value: 'react', 
@@ -106,44 +104,6 @@ export default function CreateProjectPage() {
     }));
   };
 
-  const handleSelectFolder = async () => {
-    try {
-      // Check if the File System Access API is supported
-      if ('showDirectoryPicker' in window) {
-        // Use modern File System Access API
-        const directoryHandle = await window.showDirectoryPicker();
-        // For security reasons, we can't get the full file system path
-        // So we'll use the directory name and let the user confirm the path
-        setFormData(prev => ({
-          ...prev,
-          localPath: `Selected: ${directoryHandle.name}` // This is just for display
-        }));
-        
-        // Store the directory handle for potential future use
-        setDirectoryHandle(directoryHandle);
-      } else {
-        // Show our custom folder browser as fallback
-        setShowFolderBrowser(true);
-      }
-    } catch (error) {
-      if (error.name === 'AbortError') {
-        // User cancelled the dialog
-        return;
-      }
-      console.error('Error selecting folder:', error);
-      // Show our custom folder browser as fallback
-      setShowFolderBrowser(true);
-    }
-  };
-
-  const handleFolderSelected = (path) => {
-    setFormData(prev => ({
-      ...prev,
-      localPath: path
-    }));
-    setShowFolderBrowser(false);
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -153,15 +113,23 @@ export default function CreateProjectPage() {
 
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      
+      // Prepare request data without localPath
+      const requestData = {
+        name: formData.name,
+        description: formData.description,
+        projectType: formData.projectType,
+        userId: 'mock-user-id' // Replace with actual user ID when auth is implemented
+      };
+      
+      console.log('🚀 Creating project with cleaned data:', requestData);
+      
       const response = await fetch(`${BACKEND_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          userId: 'mock-user-id' // Replace with actual user ID when auth is implemented
-        }),
+        body: JSON.stringify(requestData),
       });
 
       const data = await response.json();
@@ -309,37 +277,6 @@ export default function CreateProjectPage() {
               )}
             </div>
 
-            {/* Local Folder Path */}
-            <div>
-              <label htmlFor="localPath" className="block text-sm font-medium mb-2">
-                Local Folder Path *
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="localPath"
-                  name="localPath"
-                  type="text"
-                  required
-                  value={formData.localPath}
-                  onChange={handleInputChange}
-                  placeholder="e.g., C:\\Users\\username\\projects\\my-project"
-                  className="bg-[#1a1a2e] border-gray-700 text-white flex-1"
-                />
-                <Button
-                  type="button"
-                  onClick={handleSelectFolder}
-                  variant="outline"
-                  className="border-gray-700 text-gray-300 hover:bg-[#1a1a2e]"
-                >
-                  <FolderOpen className="w-4 h-4 mr-2" />
-                  Browse
-                </Button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Select the local folder where your project files are located. This will be the working directory for terminal commands.
-              </p>
-            </div>
-
             {/* Error Message */}
             {error && (
               <div className="p-4 bg-red-900/20 border border-red-700 rounded-md">
@@ -351,7 +288,7 @@ export default function CreateProjectPage() {
             <div className="flex gap-4">
               <Button
                 type="submit"
-                disabled={loading || !formData.name || !formData.localPath}
+                disabled={loading || !formData.name}
                 className="bg-[#00ff88] text-black hover:bg-[#00ff88]/90 flex-1"
               >
                 {loading ? (
@@ -397,12 +334,14 @@ export default function CreateProjectPage() {
           </div>
         </div>
         
-        {/* Folder Browser Modal */}
+        {/* Folder Browser Modal - Removed since localPath is no longer required */}
+        {/* 
         <FolderBrowser
           isOpen={showFolderBrowser}
           onClose={() => setShowFolderBrowser(false)}
           onSelectFolder={handleFolderSelected}
         />
+        */}
       </div>
     </div>
   );
