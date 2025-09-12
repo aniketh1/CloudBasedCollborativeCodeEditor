@@ -267,7 +267,7 @@ export default function EditorPage() {
     
     // Simplified: if user is authenticated, allow access to any room
     // In production, you'd want proper room access control
-    console.log('Editor: User authenticated, granting room access');
+    console.log('Editor: User authenticated, granting room access to room:', roomId);
     setIsAuthorized(true);
     setIsCheckingAuth(false);
     setSessionCode(roomId); // Use roomId as session code
