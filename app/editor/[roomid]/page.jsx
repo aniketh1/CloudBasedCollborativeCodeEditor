@@ -821,9 +821,7 @@ export default function EditorPage() {
                   editorRef.current = editor;
                   
                   // Add custom keybindings using correct Monaco API
-                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-                    handleSave();
-                  });
+                  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, handleSave);
                   
                   // Track cursor position changes for collaboration
                   editor.onDidChangeCursorPosition((e) => {
