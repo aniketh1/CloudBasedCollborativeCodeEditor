@@ -778,6 +778,36 @@ export default function EditorPage() {
     };
   }, [roomId, isAuthorized, isClient, isMounted, isLoaded, currentUser]);
 
+  // File selection handler
+  const handleFileSelect = (filePath) => {
+    if (!socket || !isConnected || !isProjectLoaded) {
+      console.warn('⚠️ Cannot select file: not ready', { socket: !!socket, isConnected, isProjectLoaded });
+      return;
+    }
+
+    // Validate file path and current user
+    if (!filePath || !currentUser) {
+      console.warn('⚠️ Cannot select file: missing path or user data');
+      return;
+    }
+
+    console.log('📄 Requesting file content for:', filePath);
+    setSelectedFile(filePath);
+    setCurrentLanguage(getLanguageFromFileName(filePath));
+    
+    // Notify other users about file selection
+    if (socket && isConnected && currentUser) {
+      socket.emit('file-selected', {
+        roomId,
+        userId: currentUser.id,
+        filePath
+      });
+      
+      // Request file content with error handling
+      socket.emit('read-file', { roomId, filePath });
+    }
+  };
+
   // Save function
   const handleSave = async () => {
     if (!socket || !isConnected || !selectedFile || !hasUnsavedChanges || isSaving) {
@@ -864,32 +894,6 @@ export default function EditorPage() {
     }
   };
 
-  const handleFileSelect = (filePath) => {
-    console.log('📄 Requesting file:', filePath);
-    
-    // Validate file path and connection
-    if (!filePath || !socket || !isConnected || !currentUser) {
-      console.warn('⚠️ Cannot select file: missing path, socket, connection, or user data');
-      return;
-    }
-    
-    setSelectedFile(filePath);
-    setCurrentLanguage(getLanguageFromFileName(filePath));
-    
-    // Notify other users about file selection
-    if (socket && isConnected && currentUser) {
-      socket.emit('file-selected', {
-        roomId,
-        userId: currentUser.id,
-        filePath
-      });
-      
-      // Request file content with error handling
-      console.log('📄 Requesting file content for:', filePath);
-      socket.emit('read-file', { roomId, filePath });
-    }
-  };
-
   // Keyboard shortcut for save (Ctrl+S)
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -925,8 +929,8 @@ export default function EditorPage() {
                   newExpanded.delete(item.path);
                 } else {
                   newExpanded.add(item.path);
-                  // Load folder contents if not already loaded
-                  if (socket && isConnected && (!item.children || item.children.length === 0)) {
+                  // Load folder contents if not already loaded and room is ready
+                  if (socket && isConnected && isProjectLoaded && (!item.children || item.children.length === 0)) {
                     console.log('📁 Requesting folder:', item.path);
                     socket.emit('read-folder', { roomId, folderPath: item.path });
                   }
@@ -953,9 +957,11 @@ export default function EditorPage() {
               selectedFile === item.path ? 'bg-blue-900' : ''
             }`}
             onClick={() => {
-              if (socket && isConnected) {
+              if (socket && isConnected && isProjectLoaded) {
                 console.log('📄 Requesting file:', item.path);
                 handleFileSelect(item.path);
+              } else {
+                console.warn('⚠️ Cannot select file: room not ready', { socket: !!socket, isConnected, isProjectLoaded });
               }
             }}
           >
