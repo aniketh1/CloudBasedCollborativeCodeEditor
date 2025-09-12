@@ -7,17 +7,9 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware((auth, req) => {
-  // Simple protection for defined routes
-  if (isProtectedRoute(req)) {
-    auth().protect();
-  }
+  if (isProtectedRoute(req)) auth().protect();
 });
 
 export const config = {
-  // Only run middleware on specific protected routes
-  matcher: [
-    '/dashboard/:path*',
-    '/editor/:path*', 
-    '/create-project/:path*'
-  ],
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)']
 };
