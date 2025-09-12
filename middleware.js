@@ -15,20 +15,30 @@ export default clerkMiddleware((auth, req) => {
     console.log('🔒 Middleware: Route is protected, checking auth...');
     
     try {
-      const { userId, sessionId } = auth();
+      // Try getting auth info
+      const authObject = auth();
+      console.log('🔍 Middleware: Auth object type:', typeof authObject);
+      console.log('🔍 Middleware: Auth object keys:', Object.keys(authObject || {}));
+      
+      const { userId, sessionId, user } = authObject;
       console.log('👤 Middleware: userId:', userId);
       console.log('🎫 Middleware: sessionId:', sessionId);
+      console.log('👨‍💻 Middleware: user:', user ? 'exists' : 'null');
       
-      if (!userId) {
-        console.log('❌ Middleware: No userId, redirecting to sign-in');
+      // Also try the protect method approach
+      try {
+        authObject.protect();
+        console.log('✅ Middleware: protect() succeeded - user is authenticated');
+        return; // Allow access
+      } catch (protectError) {
+        console.log('❌ Middleware: protect() failed:', protectError.message);
         const url = req.nextUrl.clone();
         url.pathname = '/sign-in';
         return Response.redirect(url);
       }
       
-      console.log('✅ Middleware: User authenticated, allowing access');
     } catch (authError) {
-      console.error('💥 Middleware: Auth error:', authError);
+      console.error('💥 Middleware: Auth error:', authError.message);
       const url = req.nextUrl.clone();
       url.pathname = '/sign-in';
       return Response.redirect(url);
