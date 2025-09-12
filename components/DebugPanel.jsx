@@ -9,6 +9,9 @@ export default function DebugPanel({ socket, connectionStatus, isProjectLoaded, 
   const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'Not configured';
+    const isProduction = backendUrl.includes('onrender.com');
+    
     setDebugInfo({
       timestamp: new Date().toLocaleTimeString(),
       userAuthenticated: !!user,
@@ -16,7 +19,8 @@ export default function DebugPanel({ socket, connectionStatus, isProjectLoaded, 
       socketConnected: !!socket,
       socketId: socket?.id || 'No socket',
       connectionStatus,
-      backendUrl: process.env.NEXT_PUBLIC_BACKEND_URL || 'Not configured',
+      backendUrl,
+      backendType: isProduction ? 'Production (Render)' : 'Local Development',
       isProjectLoaded,
       filesCount: files?.length || 0,
       environment: process.env.NODE_ENV || 'unknown'
@@ -84,6 +88,11 @@ export default function DebugPanel({ socket, connectionStatus, isProjectLoaded, 
           <div className="text-gray-400">Backend:</div>
           <div className="truncate" title={debugInfo.backendUrl}>
             {debugInfo.backendUrl?.replace('https://', '')}
+          </div>
+          
+          <div className="text-gray-400">Backend Type:</div>
+          <div className={debugInfo.backendType?.includes('Production') ? 'text-blue-400' : 'text-orange-400'}>
+            {debugInfo.backendType}
           </div>
           
           <div className="text-gray-400">Project:</div>

@@ -29,10 +29,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import DebugPanel from '@/components/DebugPanel';
+import ConnectionStatus from '@/components/ConnectionStatus';
 
-// Dynamic imports for client-side components
-const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
-const XTermWrapper = dynamic(() => import('./XTermWrapper_test'), { ssr: false });
+// Dynamic imports for client-side components with loading fallback
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { 
+  ssr: false,
+  loading: () => <div className="h-full flex items-center justify-center bg-[#0d1117] text-white">Loading Editor...</div>
+});
+const XTermWrapper = dynamic(() => import('./XTermWrapper_test'), { 
+  ssr: false,
+  loading: () => <div className="h-24 flex items-center justify-center bg-[#0c0c0c] text-green-400">Loading Terminal...</div>
+});
 
 export default function EditorPage() {
   const params = useParams();
@@ -352,30 +359,33 @@ export default function EditorPage() {
 
   // Initialize socket connection - ONLY if authenticated and client-side
   useEffect(() => {
-    if (!roomId || socketRef.current || !isAuthorized || !isClient || !isMounted) return;
+    if (!roomId || socketRef.current || !isAuthorized || !isClient || !isMounted || !isLoaded) return;
 
-    console.log('🚀 Initializing connection for room:', roomId);
+    console.log('🚀 Initializing Socket.IO connection for room:', roomId);
+    console.log('🔍 User:', user?.emailAddresses?.[0]?.emailAddress);
     setConnectionStatus('connecting');
 
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-    console.log('🔗 Connecting to backend:', BACKEND_URL);
+    console.log('🔗 Connecting to deployed backend:', BACKEND_URL);
+    console.log('🌐 Backend type:', BACKEND_URL.includes('onrender.com') ? 'Production (Render)' : 'Local Development');
     
     const newSocket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
-      timeout: 20000,
+      timeout: 15000, // Increased timeout for deployed backend
       autoConnect: true,
       forceNew: false,
       upgrade: true,
-      rememberUpgrade: true
+      rememberUpgrade: true,
+      withCredentials: true
     });
 
     socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Connection events with detailed logging
+    // Connection events with enhanced logging
     newSocket.on('connect', () => {
       if (!mountedRef.current) return;
-      console.log('✅ Connected to server, Socket ID:', newSocket.id);
+      console.log('✅ Socket.IO Connected! Socket ID:', newSocket.id);
       setIsConnected(true);
       setConnectionStatus('connected');
       
@@ -386,12 +396,19 @@ export default function EditorPage() {
 
     newSocket.on('disconnect', (reason) => {
       if (!mountedRef.current) return;
-      console.log('❌ Disconnected from server. Reason:', reason);
+      console.log('❌ Socket.IO Disconnected. Reason:', reason);
       setIsConnected(false);
       setConnectionStatus('disconnected');
+      setTerminalStatus('connecting');
     });
 
-    // Connection error handling
+    // Enhanced connection error handling
+    newSocket.on('connect_error', (error) => {
+      console.error('🚨 Socket.IO Connection Error:', error);
+      setConnectionStatus('disconnected');
+      setIsConnected(false);
+      setTerminalStatus('error');
+    });
     newSocket.on('connect_error', (error) => {
       console.error('🚨 Connection error:', error);
       setConnectionStatus('disconnected');
@@ -498,46 +515,90 @@ export default function EditorPage() {
       });
     });
 
-    // Error handlers
+    // Error handlers with user-friendly messages
     newSocket.on('file-error', (data) => {
       if (!mountedRef.current) return;
       console.error('📄 File error:', data.error);
+      
+      // Show user-friendly error message
+      if (data.error === 'Room not found') {
+        console.error('🏠 Room not found - this might be a room synchronization issue');
+        // Could show a toast notification here
+      } else if (data.error === 'File not found') {
+        console.error('📄 File not found - file may have been deleted or moved');
+        setCode('// File not found\n// The file may have been deleted or is not accessible');
+      }
     });
 
     newSocket.on('folder-error', (data) => {
       if (!mountedRef.current) return;
       console.error('📁 Folder error:', data.error);
+      
+      if (data.error === 'Room not found') {
+        console.error('🏠 Room not found - this might be a room synchronization issue');
+      }
     });
 
     // Enhanced collaboration events
     newSocket.on('room-users', (users) => {
       if (!mountedRef.current) return;
       console.log('👥 Room users updated:', users);
-      setRoomUsers(users.filter(user => user.id !== currentUser.id));
+      
+      // Handle both array and object cases from backend
+      let userArray = [];
+      if (Array.isArray(users)) {
+        userArray = users;
+      } else if (users && typeof users === 'object') {
+        // If backend sends an object with users property
+        userArray = users.users || [users];
+      } else {
+        console.warn('⚠️ Unexpected users format:', users);
+        userArray = [];
+      }
+      
+      setRoomUsers(userArray.filter(user => user.id !== currentUser.id));
     });
 
     newSocket.on('user-joined', (userData) => {
       if (!mountedRef.current) return;
       console.log('👋 User joined:', userData);
-      if (userData.id !== currentUser.id) {
-        setRoomUsers(prev => [...prev.filter(user => user.id !== userData.id), userData]);
+      if (userData && userData.id !== currentUser.id) {
+        setRoomUsers(prev => {
+          // Ensure prev is an array
+          const currentUsers = Array.isArray(prev) ? prev : [];
+          return [...currentUsers.filter(user => user.id !== userData.id), userData];
+        });
       }
     });
 
     newSocket.on('user-left', ({ userId }) => {
       if (!mountedRef.current) return;
       console.log('👋 User left:', userId);
-      setRoomUsers(prev => prev.filter(user => user.id !== userId));
+      setRoomUsers(prev => {
+        // Ensure prev is an array
+        const currentUsers = Array.isArray(prev) ? prev : [];
+        return currentUsers.filter(user => user.id !== userId);
+      });
       setUserCursors(prev => {
         const newCursors = new Map(prev);
         newCursors.delete(userId);
         return newCursors;
       });
-      setTypingUsers(prev => {
-        const newTyping = new Set(prev);
-        newTyping.delete(userId);
-        return newTyping;
-      });
+    });
+
+    newSocket.on('user-typing', ({ userId, filePath, isTyping }) => {
+      if (!mountedRef.current) return;
+      if (userId !== currentUser.id && filePath === selectedFile) {
+        setTypingUsers(prev => {
+          const newTyping = new Set(prev);
+          if (isTyping) {
+            newTyping.add(userId);
+          } else {
+            newTyping.delete(userId);
+          }
+          return newTyping;
+        });
+      }
     });
 
     newSocket.on('cursor-update', (cursorData) => {
@@ -628,9 +689,13 @@ export default function EditorPage() {
 
     newSocket.on('user-status-changed', ({ userId, isActive }) => {
       if (!mountedRef.current) return;
-      setRoomUsers(prev => prev.map(user => 
-        user.id === userId ? { ...user, isActive } : user
-      ));
+      setRoomUsers(prev => {
+        // Ensure prev is an array
+        const currentUsers = Array.isArray(prev) ? prev : [];
+        return currentUsers.map(user => 
+          user.id === userId ? { ...user, isActive } : user
+        );
+      });
     });
 
     // Send user join event
@@ -650,7 +715,7 @@ export default function EditorPage() {
       }
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, isAuthorized, isClient, isMounted, user?.emailAddresses, isLoaded]);
 
   // Save function
   const handleSave = async () => {
@@ -737,6 +802,14 @@ export default function EditorPage() {
   };
 
   const handleFileSelect = (filePath) => {
+    console.log('📄 Requesting file:', filePath);
+    
+    // Validate file path and connection
+    if (!filePath || !socket || !isConnected) {
+      console.warn('⚠️ Cannot select file: missing path, socket, or connection');
+      return;
+    }
+    
     setSelectedFile(filePath);
     setCurrentLanguage(getLanguageFromFileName(filePath));
     
@@ -748,6 +821,8 @@ export default function EditorPage() {
         filePath
       });
       
+      // Request file content with error handling
+      console.log('📄 Requesting file content for:', filePath);
       socket.emit('read-file', { roomId, filePath });
     }
   };
@@ -1022,16 +1097,13 @@ export default function EditorPage() {
           
           {/* Connection Status */}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              connectionStatus === 'connected' ? 'bg-green-500' : 
-              connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
-              'bg-red-500'
-            }`} />
-            <span className="text-sm text-gray-400">
-              {connectionStatus === 'connected' ? 'Connected' : 
-               connectionStatus === 'connecting' ? 'Connecting...' : 
-               'Disconnected'}
-            </span>
+            <ConnectionStatus 
+              socket={socket}
+              isConnected={isConnected}
+              connectionStatus={connectionStatus}
+              terminalStatus={terminalStatus}
+              isProjectLoaded={isProjectLoaded}
+            />
           </div>
         </div>
       </div>
