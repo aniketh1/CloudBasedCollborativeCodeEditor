@@ -92,6 +92,9 @@ export default function EditorPage() {
   const [roomUsers, setRoomUsers] = useState([]);
   const [userCursors, setUserCursors] = useState(new Map());
   const [typingUsers, setTypingUsers] = useState(new Set());
+  const [editingUsers, setEditingUsers] = useState(new Map()); // filePath -> Set of userIds
+  const [realtimeContent, setRealtimeContent] = useState(new Map()); // filePath -> content
+  const [collaborativeUpdates, setCollaborativeUpdates] = useState(false);
   
   // Real user data from Clerk
   const [currentUser, setCurrentUser] = useState(null);
@@ -102,6 +105,8 @@ export default function EditorPage() {
   const mountedRef = useRef(true);
   const editorRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const lastContentRef = useRef('');
+  const syncTimeoutRef = useRef(null);
 
   // Language detection based on file extension
   const getLanguageFromFileName = (fileName) => {
@@ -732,6 +737,169 @@ export default function EditorPage() {
       }
     });
 
+    // ================== ENHANCED COLLABORATIVE FEATURES ==================
+    
+    // Real-time content synchronization
+    newSocket.on('realtime-content-sync', ({ userId, userName, filePath, content, selection, cursor, timestamp }) => {
+      if (!mountedRef.current || userId === currentUser.id) return;
+      
+      console.log(`🔄 Real-time content from ${userName} in ${filePath}`);
+      
+      // Only update if it's the currently selected file
+      if (filePath === selectedFile && !collaborativeUpdates) {
+        setCollaborativeUpdates(true);
+        setCode(content);
+        lastContentRef.current = content;
+        
+        // Reset collaborative updates flag after a brief delay
+        setTimeout(() => {
+          setCollaborativeUpdates(false);
+        }, 100);
+      }
+      
+      // Store content for when user switches to this file
+      setRealtimeContent(prev => {
+        const newContent = new Map(prev);
+        newContent.set(filePath, content);
+        return newContent;
+      });
+    });
+
+    // Enhanced typing indicators with line information
+    newSocket.on('user-enhanced-typing', ({ userId, userName, filePath, lineNumber, position, type, timestamp }) => {
+      if (!mountedRef.current || userId === currentUser.id) return;
+      
+      console.log(`⌨️ ${userName} ${type} at line ${lineNumber} in ${filePath}`);
+      
+      if (filePath === selectedFile) {
+        setTypingUsers(prev => {
+          const newTyping = new Set(prev);
+          if (type === 'typing-start') {
+            newTyping.add(`${userId}-${lineNumber}`);
+          } else {
+            // Remove all typing indicators for this user
+            Array.from(newTyping).forEach(item => {
+              if (item.startsWith(`${userId}-`)) {
+                newTyping.delete(item);
+              }
+            });
+          }
+          return newTyping;
+        });
+        
+        // Update editing users for the file
+        setEditingUsers(prev => {
+          const newEditing = new Map(prev);
+          if (!newEditing.has(filePath)) {
+            newEditing.set(filePath, new Set());
+          }
+          
+          if (type === 'typing-start') {
+            newEditing.get(filePath).add(userId);
+          } else {
+            newEditing.get(filePath).delete(userId);
+          }
+          
+          return newEditing;
+        });
+      }
+    });
+
+    // Enhanced cursor tracking
+    newSocket.on('cursor-update', ({ userId, userName, filePath, position, selection, color }) => {
+      if (!mountedRef.current || userId === currentUser.id) return;
+      
+      if (filePath === selectedFile) {
+        setUserCursors(prev => {
+          const newCursors = new Map(prev);
+          newCursors.set(userId, {
+            userId,
+            userName,
+            position,
+            selection,
+            color: color || `hsl(${Math.abs(userId.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 50%)`,
+            timestamp: Date.now()
+          });
+          return newCursors;
+        });
+      }
+    });
+
+    // Code operation handling (for conflict resolution)
+    newSocket.on('code-operation', ({ userId, userName, filePath, operation, position, content, range, operationId }) => {
+      if (!mountedRef.current || userId === currentUser.id) return;
+      
+      console.log(`⚡ Code operation from ${userName}: ${operation} in ${filePath}`);
+      
+      // Only apply if it's the currently selected file and not our own operation
+      if (filePath === selectedFile && !collaborativeUpdates) {
+        setCollaborativeUpdates(true);
+        
+        // Apply the operation content
+        if (content && content !== lastContentRef.current) {
+          setCode(content);
+          lastContentRef.current = content;
+        }
+        
+        // Reset collaborative updates flag
+        setTimeout(() => {
+          setCollaborativeUpdates(false);
+        }, 100);
+      }
+    });
+
+    // File operation results
+    newSocket.on('file-created', ({ filePath, success }) => {
+      if (!mountedRef.current) return;
+      console.log(`✅ File created: ${filePath}`);
+      // Refresh file tree
+      if (socket && isConnected) {
+        socket.emit('refresh-files', { roomId });
+      }
+    });
+
+    newSocket.on('folder-created', ({ folderPath, success }) => {
+      if (!mountedRef.current) return;
+      console.log(`✅ Folder created: ${folderPath}`);
+      // Refresh file tree
+      if (socket && isConnected) {
+        socket.emit('refresh-files', { roomId });
+      }
+    });
+
+    newSocket.on('file-deleted', ({ filePath, success }) => {
+      if (!mountedRef.current) return;
+      console.log(`🗑️ File deleted: ${filePath}`);
+      
+      // If the deleted file was selected, clear the editor
+      if (filePath === selectedFile) {
+        setSelectedFile(null);
+        setCode('// Select a file to start editing...');
+      }
+      
+      // Refresh file tree
+      if (socket && isConnected) {
+        socket.emit('refresh-files', { roomId });
+      }
+    });
+
+    newSocket.on('folder-deleted', ({ folderPath, success }) => {
+      if (!mountedRef.current) return;
+      console.log(`🗑️ Folder deleted: ${folderPath}`);
+      // Refresh file tree
+      if (socket && isConnected) {
+        socket.emit('refresh-files', { roomId });
+      }
+    });
+
+    newSocket.on('file-operation-error', ({ error, operation }) => {
+      if (!mountedRef.current) return;
+      console.error(`❌ File operation error (${operation}):`, error);
+      // You could show a toast notification here
+    });
+
+    // ================== END ENHANCED FEATURES ==================
+
     newSocket.on('user-typing', ({ userId, filePath, isTyping }) => {
       if (!mountedRef.current) return;
       if (userId !== currentUser.id && filePath === selectedFile) {
@@ -798,7 +966,7 @@ export default function EditorPage() {
     };
   }, [roomId, isAuthorized, isClient, isMounted, isLoaded, currentUser]);
 
-  // File selection handler
+  // Enhanced file selection handler with real-time content
   const handleFileSelect = (filePath) => {
     if (!socket || !isConnected || !isProjectLoaded) {
       console.warn('⚠️ Cannot select file: not ready', { socket: !!socket, isConnected, isProjectLoaded });
@@ -815,6 +983,15 @@ export default function EditorPage() {
     setSelectedFile(filePath);
     setCurrentLanguage(getLanguageFromFileName(filePath));
     
+    // Check if we have real-time content for this file
+    if (realtimeContent.has(filePath)) {
+      const content = realtimeContent.get(filePath);
+      console.log('📄 Loading real-time content for:', filePath);
+      setCode(content);
+      lastContentRef.current = content;
+      setHasUnsavedChanges(false); // Real-time content is considered saved
+    }
+    
     // Notify other users about file selection
     if (socket && isConnected && currentUser) {
       socket.emit('file-selected', {
@@ -828,7 +1005,7 @@ export default function EditorPage() {
     }
   };
 
-  // Save function
+  // Enhanced save function
   const handleSave = async () => {
     if (!socket || !isConnected || !selectedFile || !hasUnsavedChanges || isSaving) {
       return;
@@ -849,6 +1026,131 @@ export default function EditorPage() {
     }
   };
 
+  // ================== FILE OPERATION FUNCTIONS ==================
+  
+  const createFile = (folderPath = '') => {
+    const fileName = prompt('Enter file name:');
+    if (!fileName) return;
+    
+    const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
+    
+    if (socket && isConnected && currentUser) {
+      socket.emit('create-file', {
+        roomId,
+        filePath,
+        initialContent: `// ${fileName}\n// Created by ${currentUser.name}\n\n`
+      });
+    }
+  };
+
+  const createFolder = (parentPath = '') => {
+    const folderName = prompt('Enter folder name:');
+    if (!folderName) return;
+    
+    const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+    
+    if (socket && isConnected && currentUser) {
+      socket.emit('create-folder', {
+        roomId,
+        folderPath
+      });
+    }
+  };
+
+  const deleteFile = (filePath) => {
+    const confirmed = confirm(`Are you sure you want to delete "${filePath}"?`);
+    if (!confirmed) return;
+    
+    if (socket && isConnected && currentUser) {
+      socket.emit('delete-file', {
+        roomId,
+        filePath
+      });
+    }
+  };
+
+  const deleteFolder = (folderPath) => {
+    const confirmed = confirm(`Are you sure you want to delete folder "${folderPath}" and all its contents?`);
+    if (!confirmed) return;
+    
+    if (socket && isConnected && currentUser) {
+      socket.emit('delete-folder', {
+        roomId,
+        folderPath
+      });
+    }
+  };
+
+  // ================== FILE ICONS ==================
+  
+  const getFileIcon = (fileName) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    
+    switch (ext) {
+      case 'js':
+      case 'jsx':
+        return '📄'; // JavaScript
+      case 'ts':
+      case 'tsx':
+        return '🔷'; // TypeScript
+      case 'html':
+        return '🌐'; // HTML
+      case 'css':
+        return '🎨'; // CSS
+      case 'scss':
+      case 'sass':
+        return '💄'; // SCSS/SASS
+      case 'json':
+        return '📋'; // JSON
+      case 'md':
+        return '📝'; // Markdown
+      case 'py':
+        return '🐍'; // Python
+      case 'java':
+        return '☕'; // Java
+      case 'cpp':
+      case 'c':
+        return '⚡'; // C/C++
+      case 'php':
+        return '🐘'; // PHP
+      case 'rb':
+        return '💎'; // Ruby
+      case 'go':
+        return '🐹'; // Go
+      case 'rs':
+        return '🦀'; // Rust
+      case 'sql':
+        return '🗃️'; // SQL
+      case 'xml':
+        return '📰'; // XML
+      case 'yml':
+      case 'yaml':
+        return '⚙️'; // YAML
+      case 'docker':
+      case 'dockerfile':
+        return '🐳'; // Docker
+      case 'git':
+      case 'gitignore':
+        return '🌳'; // Git
+      case 'txt':
+        return '📄'; // Text
+      case 'log':
+        return '📊'; // Log
+      case 'env':
+        return '🔐'; // Environment
+      case 'config':
+        return '⚙️'; // Config
+      default:
+        return '📄'; // Default file
+    }
+  };
+
+  const getFolderIcon = (isExpanded) => {
+    return isExpanded ? '📂' : '📁';
+  };
+
+  // ================== END FILE OPERATIONS ==================
+
   // Collaboration helper functions
   const handleCursorPositionChange = (position, selection) => {
     if (socket && isConnected && selectedFile && currentUser) {
@@ -862,48 +1164,76 @@ export default function EditorPage() {
     }
   };
 
+  // Enhanced real-time collaborative code change handler
   const handleCodeChange = (newCode, operation = 'replace') => {
+    // Skip if this is a collaborative update to prevent infinite loops
+    if (collaborativeUpdates) {
+      return;
+    }
+    
     setCode(newCode || '');
     setHasUnsavedChanges(true);
+    lastContentRef.current = newCode || '';
     
-    // Clear typing timeout and set new one
+    // Clear previous timeouts
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
     
-    // Send typing start indicator
     if (socket && isConnected && selectedFile && currentUser) {
-      socket.emit('typing-start', {
+      // Get current cursor position and selection
+      const editor = editorRef.current;
+      const position = editor?.getPosition();
+      const selection = editor?.getSelection();
+      
+      // Send enhanced typing start indicator with line information
+      socket.emit('enhanced-typing-start', {
         roomId,
         userId: currentUser.id,
         userName: currentUser.name,
-        filePath: selectedFile
+        filePath: selectedFile,
+        lineNumber: position?.lineNumber || 1,
+        position
       });
       
-      // Send code operation for real-time sync with debouncing
+      // Real-time content synchronization (without saving)
+      socket.emit('realtime-content-sync', {
+        roomId,
+        userId: currentUser.id,
+        filePath: selectedFile,
+        content: newCode,
+        selection: selection ? {
+          start: { line: selection.startLineNumber, column: selection.startColumn },
+          end: { line: selection.endLineNumber, column: selection.endColumn }
+        } : null,
+        cursor: position
+      });
+      
+      // Enhanced code operation with range information
       socket.emit('code-operation', {
         roomId,
         userId: currentUser.id,
         userName: currentUser.name,
         filePath: selectedFile,
         operation,
-        position: editorRef.current?.getPosition(),
+        position,
         content: newCode,
+        range: selection ? {
+          startLineNumber: selection.startLineNumber,
+          startColumn: selection.startColumn,
+          endLineNumber: selection.endLineNumber,
+          endColumn: selection.endColumn
+        } : null,
         timestamp: Date.now()
       });
       
-      // Auto-save after a short delay (optional - can be removed if not wanted)
-      // clearTimeout(autoSaveTimeoutRef.current);
-      // autoSaveTimeoutRef.current = setTimeout(() => {
-      //   if (hasUnsavedChanges) {
-      //     handleSave();
-      //   }
-      // }, 2000); // Auto-save after 2 seconds of inactivity
-      
-      // Set timeout to send typing stop
+      // Set timeout to send enhanced typing stop
       typingTimeoutRef.current = setTimeout(() => {
         if (socket && currentUser) {
-          socket.emit('typing-stop', {
+          socket.emit('enhanced-typing-stop', {
             roomId,
             userId: currentUser.id,
             userName: currentUser.name,
@@ -927,12 +1257,34 @@ export default function EditorPage() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedFile, hasUnsavedChanges, isSaving, socket, isConnected, code, roomId]);
 
-  // File tree rendering
+  // Enhanced file tree rendering with icons and context menus
   const renderFileTree = (items, level = 0) => {
     if (!items || items.length === 0) {
       return (
-        <div className="p-4 text-gray-400 text-sm">
-          {isConnected ? 'No files in project' : 'Connecting...'}
+        <div className="p-4 text-gray-400 text-sm space-y-2">
+          {isConnected ? (
+            <div>
+              <p>No files in project</p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => createFile()}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded"
+                  title="Create New File"
+                >
+                  📄 New File
+                </button>
+                <button
+                  onClick={() => createFolder()}
+                  className="text-xs bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
+                  title="Create New Folder"
+                >
+                  📁 New Folder
+                </button>
+              </div>
+            </div>
+          ) : (
+            'Connecting...'
+          )}
         </div>
       );
     }
@@ -942,7 +1294,47 @@ export default function EditorPage() {
         {item.type === 'folder' ? (
           <div>
             <div
-              className="flex items-center gap-1 px-2 py-1 hover:bg-gray-800 cursor-pointer text-sm"
+              className="group flex items-center gap-1 px-2 py-1 hover:bg-gray-800 cursor-pointer text-sm relative"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                // Context menu for folders
+                const menu = document.createElement('div');
+                menu.className = 'fixed bg-[#161b22] border border-gray-700 rounded-lg shadow-xl z-50 py-1 min-w-32';
+                menu.style.left = `${e.clientX}px`;
+                menu.style.top = `${e.clientY}px`;
+                
+                menu.innerHTML = `
+                  <button class="w-full text-left px-3 py-1 hover:bg-gray-700 text-white text-xs" data-action="new-file">📄 New File</button>
+                  <button class="w-full text-left px-3 py-1 hover:bg-gray-700 text-white text-xs" data-action="new-folder">📁 New Folder</button>
+                  <hr class="border-gray-700 my-1">
+                  <button class="w-full text-left px-3 py-1 hover:bg-gray-700 text-red-400 text-xs" data-action="delete">🗑️ Delete Folder</button>
+                `;
+                
+                document.body.appendChild(menu);
+                
+                const handleMenuClick = (e) => {
+                  const action = e.target.dataset.action;
+                  if (action === 'new-file') createFile(item.path);
+                  else if (action === 'new-folder') createFolder(item.path);
+                  else if (action === 'delete') deleteFolder(item.path);
+                  
+                  document.body.removeChild(menu);
+                  document.removeEventListener('click', handleMenuClick);
+                };
+                
+                document.addEventListener('click', handleMenuClick);
+                
+                // Remove menu when clicking outside
+                setTimeout(() => {
+                  const handleClickOutside = () => {
+                    if (document.body.contains(menu)) {
+                      document.body.removeChild(menu);
+                    }
+                    document.removeEventListener('click', handleClickOutside);
+                  };
+                  document.addEventListener('click', handleClickOutside);
+                }, 100);
+              }}
               onClick={() => {
                 const newExpanded = new Set(expandedFolders);
                 if (newExpanded.has(item.path)) {
@@ -958,12 +1350,49 @@ export default function EditorPage() {
                 setExpandedFolders(newExpanded);
               }}
             >
-              {expandedFolders.has(item.path) ? (
-                <FolderOpen className="w-4 h-4 text-blue-400" />
-              ) : (
-                <Folder className="w-4 h-4 text-blue-400" />
+              <span className="text-lg">{getFolderIcon(expandedFolders.has(item.path))}</span>
+              <span className="text-gray-300 flex-1">{item.name}</span>
+              
+              {/* Editing indicator for folders */}
+              {editingUsers.has(item.path) && editingUsers.get(item.path).size > 0 && (
+                <div className="flex -space-x-1">
+                  {Array.from(editingUsers.get(item.path)).slice(0, 3).map((userId) => {
+                    const user = roomUsers.find(u => u.id === userId);
+                    return (
+                      <div
+                        key={userId}
+                        className="w-2 h-2 rounded-full border border-gray-800"
+                        style={{ backgroundColor: user?.color || '#6b7280' }}
+                        title={`${user?.name || userId} is editing`}
+                      />
+                    );
+                  })}
+                </div>
               )}
-              <span className="text-gray-300">{item.name}</span>
+              
+              {/* Quick action buttons on hover */}
+              <div className="hidden group-hover:flex gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    createFile(item.path);
+                  }}
+                  className="text-gray-500 hover:text-white p-1"
+                  title="New File"
+                >
+                  <span className="text-xs">📄</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    createFolder(item.path);
+                  }}
+                  className="text-gray-500 hover:text-white p-1"
+                  title="New Folder"
+                >
+                  <span className="text-xs">📁</span>
+                </button>
+              </div>
             </div>
             {expandedFolders.has(item.path) && item.children && (
               <div>
@@ -973,25 +1402,87 @@ export default function EditorPage() {
           </div>
         ) : (
           <div
-            className={`flex items-center gap-1 px-2 py-1 hover:bg-gray-800 cursor-pointer text-sm ${
-              selectedFile === item.path ? 'bg-blue-900' : ''
-            }`}
-            onClick={() => {
-              if (socket && isConnected && isProjectLoaded) {
-                console.log('📄 Requesting file:', item.path);
-                handleFileSelect(item.path);
-              } else {
-                console.warn('⚠️ Cannot select file: room not ready', { socket: !!socket, isConnected, isProjectLoaded });
-              }
+            className="group flex items-center gap-1 px-2 py-1 hover:bg-gray-800 cursor-pointer text-sm relative"
+            onContextMenu={(e) => {
+              e.preventDefault();
+              // Context menu for files
+              const menu = document.createElement('div');
+              menu.className = 'fixed bg-[#161b22] border border-gray-700 rounded-lg shadow-xl z-50 py-1 min-w-32';
+              menu.style.left = `${e.clientX}px`;
+              menu.style.top = `${e.clientY}px`;
+              
+              menu.innerHTML = `
+                <button class="w-full text-left px-3 py-1 hover:bg-gray-700 text-white text-xs" data-action="open">📂 Open</button>
+                <hr class="border-gray-700 my-1">
+                <button class="w-full text-left px-3 py-1 hover:bg-gray-700 text-red-400 text-xs" data-action="delete">🗑️ Delete File</button>
+              `;
+              
+              document.body.appendChild(menu);
+              
+              const handleMenuClick = (e) => {
+                const action = e.target.dataset.action;
+                if (action === 'open') handleFileSelect(item.path);
+                else if (action === 'delete') deleteFile(item.path);
+                
+                document.body.removeChild(menu);
+                document.removeEventListener('click', handleMenuClick);
+              };
+              
+              document.addEventListener('click', handleMenuClick);
+              
+              // Remove menu when clicking outside
+              setTimeout(() => {
+                const handleClickOutside = () => {
+                  if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                  }
+                  document.removeEventListener('click', handleClickOutside);
+                };
+                document.addEventListener('click', handleClickOutside);
+              }, 100);
             }}
+            onClick={() => handleFileSelect(item.path)}
           >
-            <FileText className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-300">
+            <span className="text-sm">{getFileIcon(item.name)}</span>
+            <span className={`text-sm flex-1 ${selectedFile === item.path ? 'text-blue-400 font-medium' : 'text-gray-300'}`}>
               {item.name}
-              {selectedFile === item.path && hasUnsavedChanges && (
-                <span className="text-orange-400 ml-1">*</span>
-              )}
             </span>
+            
+            {/* Unsaved changes indicator */}
+            {selectedFile === item.path && hasUnsavedChanges && (
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500" title="Unsaved changes" />
+            )}
+            
+            {/* Editing indicator */}
+            {editingUsers.has(item.path) && editingUsers.get(item.path).size > 0 && (
+              <div className="flex -space-x-1">
+                {Array.from(editingUsers.get(item.path)).slice(0, 3).map((userId) => {
+                  const user = roomUsers.find(u => u.id === userId);
+                  return (
+                    <div
+                      key={userId}
+                      className="w-2 h-2 rounded-full border border-gray-800"
+                      style={{ backgroundColor: user?.color || '#6b7280' }}
+                      title={`${user?.name || userId} is editing`}
+                    />
+                  );
+                })}
+                {editingUsers.get(item.path).size > 3 && (
+                  <div className="text-xs text-gray-400">+{editingUsers.get(item.path).size - 3}</div>
+                )}
+              </div>
+            )}
+            
+            {/* Typing indicator */}
+            {Array.from(typingUsers).some(typing => typing.startsWith(`${roomUsers.find(u => editingUsers.get(item.path)?.has(u.id))?.id}-`) && selectedFile === item.path) && (
+              <div className="flex items-center">
+                <div className="flex space-x-0.5">
+                  <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1075,6 +1566,59 @@ export default function EditorPage() {
           <h1 className="text-lg font-semibold text-white">ColabDev</h1>
           {project && (
             <span className="text-sm text-gray-400">• {project.name}</span>
+          )}
+          
+          {/* Real-time Collaboration Status */}
+          {selectedFile && (
+            <div className="flex items-center gap-2">
+              <div className="w-px h-4 bg-gray-700"></div>
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400">{selectedFile.split('/').pop()}</span>
+                
+                {/* Show who's editing this file */}
+                {editingUsers.has(selectedFile) && editingUsers.get(selectedFile).size > 0 && (
+                  <div className="flex items-center gap-1 ml-2">
+                    <div className="flex -space-x-1">
+                      {Array.from(editingUsers.get(selectedFile)).slice(0, 3).map((userId) => {
+                        const user = roomUsers.find(u => u.id === userId);
+                        return (
+                          <div
+                            key={userId}
+                            className="w-4 h-4 rounded-full border border-gray-800 flex items-center justify-center text-xs font-semibold"
+                            style={{ backgroundColor: user?.color || '#6b7280', color: '#000' }}
+                            title={`${user?.name || userId} is editing`}
+                          >
+                            {(user?.name || userId).slice(0, 1).toUpperCase()}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Typing indicator */}
+                    {Array.from(typingUsers).some(typing => 
+                      editingUsers.get(selectedFile).has(typing.split('-')[0])
+                    ) && (
+                      <div className="flex items-center gap-1 text-green-400">
+                        <div className="flex space-x-0.5">
+                          <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                        <span className="text-xs">typing...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Real-time sync indicator */}
+                {collaborativeUpdates && (
+                  <div className="flex items-center gap-1 text-blue-400">
+                    <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
+                    <span className="text-xs">syncing</span>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-2">
