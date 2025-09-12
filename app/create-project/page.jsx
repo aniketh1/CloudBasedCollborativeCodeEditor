@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { FileText, Plus, Code, Terminal, FolderOpen } from 'lucide-react';
-import FolderBrowser from '@/components/FolderBrowser';
+// import FolderBrowser from '@/components/FolderBrowser'; // Removed - no longer needed
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -17,7 +17,7 @@ export default function CreateProjectPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  // const [showFolderBrowser, setShowFolderBrowser] = useState(false); // Removed - no longer needed
   const [projectTypes, setProjectTypes] = useState([
     { 
       value: 'react', 
@@ -334,12 +334,14 @@ export default function CreateProjectPage() {
           </div>
         </div>
         
-        {/* Folder Browser Modal */}
+        {/* Folder Browser Modal - Removed since localPath is no longer required */}
+        {/* 
         <FolderBrowser
           isOpen={showFolderBrowser}
           onClose={() => setShowFolderBrowser(false)}
           onSelectFolder={handleFolderSelected}
         />
+        */}
       </div>
     </div>
   );
