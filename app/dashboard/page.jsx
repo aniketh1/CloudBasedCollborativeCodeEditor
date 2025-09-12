@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { SignedIn, SignedOut, useUser } from  '@clerk/nextjs';
+import { SignedIn, SignedOut, useUser } from '@clerk/nextjs';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import CreateRoomBox from './components/CreateRoomBox';
 import JoinRoomBox from './components/JoinRoomBox';
 import RoomCard from './components/RoomCard';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, FolderOpen, Code, Clock, Users } from 'lucide-react';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { Folder, FolderOpen, Users, Plus, Code, Clock } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -16,20 +17,44 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    // Only fetch projects if user is authenticated
+    if (user) {
+      fetchProjects();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   const fetchProjects = async () => {
     try {
+      // Use environment variable or fallback to localhost for development
       const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      const response = await fetch(`${BACKEND_URL}/api/projects?userId=mock-user-id`);
-      const data = await response.json();
+      console.log('Fetching projects from:', `${BACKEND_URL}/api/projects`);
       
-      if (data.success) {
+      const response = await fetch(`${BACKEND_URL}/api/projects?userId=mock-user-id`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Projects data:', data);
+      
+      if (data.success && Array.isArray(data.projects)) {
         setProjects(data.projects);
+      } else {
+        console.warn('No projects found or invalid response format');
+        setProjects([]);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
+      // Set empty projects array on error to prevent showing loading indefinitely
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -62,7 +87,7 @@ export default function DashboardPage() {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="text-2xl font-bold">
-                Welcome, {user.fullName} 👋
+                Welcome, {user?.fullName || 'User'} 👋
               </CardTitle>
               <p className="text-gray-400">Manage your projects and collaborate with your team</p>
             </CardHeader>
