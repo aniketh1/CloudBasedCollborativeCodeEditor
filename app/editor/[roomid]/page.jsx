@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useUser, SignedIn, SignedOut } from '@clerk/nextjs';
 import dynamic from 'next/dynamic';
 import io from 'socket.io-client';
 import { 
@@ -16,8 +17,17 @@ import {
   Palette,
   Sun,
   Moon,
-  Monitor
+  Monitor,
+  UserPlus,
+  Mail,
+  Search,
+  Send,
+  Copy,
+  Check
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 
 // Dynamic imports for client-side components
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -25,7 +35,13 @@ const XTermWrapper = dynamic(() => import('./XTermWrapper_test'), { ssr: false }
 
 export default function EditorPage() {
   const params = useParams();
+  const router = useRouter();
+  const { user, isLoaded } = useUser();
   const roomId = params?.roomid;
+  
+  // Authentication check
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
   // Core state
   const [socket, setSocket] = useState(null);
@@ -47,6 +63,16 @@ export default function EditorPage() {
   const [wordWrap, setWordWrap] = useState('on');
   const [showSettings, setShowSettings] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState('javascript');
+  
+  // Invite system state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [inviteMode, setInviteMode] = useState('search'); // 'search' or 'code'
+  const [sessionCode, setSessionCode] = useState('');
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [sendingInvites, setSendingInvites] = useState(new Set());
   
   // Collaboration state
   const [roomUsers, setRoomUsers] = useState([]);
@@ -207,9 +233,123 @@ export default function EditorPage() {
     }
   });
 
-  // Initialize socket connection - ONCE
+  // Authentication check - must run first
   useEffect(() => {
-    if (!roomId || socketRef.current) return;
+    if (!isLoaded) return;
+    
+    if (!user) {
+      setIsAuthorized(false);
+      setIsCheckingAuth(false);
+      return;
+    }
+    
+    // Check if user has access to this room
+    const checkAccess = async () => {
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${BACKEND_URL}/api/rooms/${roomId}/access`, {
+          headers: {
+            'Authorization': `Bearer ${user.id}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          setIsAuthorized(true);
+          setSessionCode(roomId); // Use roomId as session code for now
+        } else {
+          setIsAuthorized(false);
+        }
+      } catch (error) {
+        console.error('Error checking room access:', error);
+        setIsAuthorized(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAccess();
+  }, [user, isLoaded, roomId]);
+
+  // User search functionality
+  const searchUsers = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/users/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${user?.id}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.users || []);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Send email invite
+  const sendEmailInvite = async (recipientUser) => {
+    setSendingInvites(prev => new Set([...prev, recipientUser.id]));
+    
+    try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${BACKEND_URL}/api/invites/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.id}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          recipientEmail: recipientUser.email,
+          recipientName: recipientUser.name,
+          roomId: roomId,
+          senderName: user?.firstName || user?.username || 'Anonymous'
+        })
+      });
+      
+      if (response.ok) {
+        alert(`Invite sent to ${recipientUser.email}!`);
+      } else {
+        alert('Failed to send invite. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error sending invite:', error);
+      alert('Failed to send invite. Please try again.');
+    } finally {
+      setSendingInvites(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(recipientUser.id);
+        return newSet;
+      });
+    }
+  };
+
+  // Copy session code
+  const copySessionCode = async () => {
+    try {
+      await navigator.clipboard.writeText(sessionCode);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  // Initialize socket connection - ONLY if authenticated
+  useEffect(() => {
+    if (!roomId || socketRef.current || !isAuthorized) return;
 
     console.log('🚀 Initializing connection for room:', roomId);
 
@@ -356,9 +496,57 @@ export default function EditorPage() {
       if (!mountedRef.current) return;
       if (operationData.userId !== currentUser.id && operationData.filePath === selectedFile) {
         console.log('🔄 Received code operation:', operationData);
-        // Apply the operation to the current code
+        // Apply the operation to the current code without triggering onChange
         setCode(operationData.content);
-        setHasUnsavedChanges(true);
+        setHasUnsavedChanges(true); // Mark as having changes from other users
+      }
+    });
+
+    // Real-time file updates from other users
+    newSocket.on('file-updated', (updateData) => {
+      if (!mountedRef.current) return;
+      console.log('🔄 File updated by another user:', updateData);
+      
+      // If the currently selected file was updated by someone else, reload it
+      if (updateData.filePath === selectedFile && updateData.userId !== user?.id) {
+        setCode(updateData.content);
+        setHasUnsavedChanges(false);
+        
+        // Show notification that file was updated
+        // You could add a toast notification here
+        console.log(`📝 File "${updateData.filePath}" was updated by ${updateData.userName}`);
+      }
+    });
+
+    // Project structure updates (files/folders added/deleted)
+    newSocket.on('project-structure-updated', (structureData) => {
+      if (!mountedRef.current) return;
+      console.log('🔄 Project structure updated:', structureData);
+      
+      // Update the file tree
+      setFiles(structureData.files || []);
+      
+      // If the currently selected file was deleted, clear the editor
+      if (structureData.deletedFiles && structureData.deletedFiles.includes(selectedFile)) {
+        setSelectedFile(null);
+        setCode('// File was deleted by another user\n// Select a new file to start editing...');
+        setHasUnsavedChanges(false);
+      }
+    });
+
+    // User activity updates
+    newSocket.on('user-activity', (activityData) => {
+      if (!mountedRef.current) return;
+      
+      // Update user status (typing, editing file, etc.)
+      if (activityData.type === 'typing-start') {
+        setTypingUsers(prev => new Set([...prev, activityData.userId]));
+      } else if (activityData.type === 'typing-stop') {
+        setTypingUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(activityData.userId);
+          return newSet;
+        });
       }
     });
 
@@ -457,24 +645,36 @@ export default function EditorPage() {
       socket.emit('typing-start', {
         roomId,
         userId: currentUser.id,
+        userName: user?.firstName || user?.username || 'Anonymous',
         filePath: selectedFile
       });
       
-      // Send code operation for real-time sync
+      // Send code operation for real-time sync with debouncing
       socket.emit('code-operation', {
         roomId,
         userId: currentUser.id,
+        userName: user?.firstName || user?.username || 'Anonymous',
         filePath: selectedFile,
         operation,
         position: editorRef.current?.getPosition(),
-        content: newCode
+        content: newCode,
+        timestamp: Date.now()
       });
+      
+      // Auto-save after a short delay (optional - can be removed if not wanted)
+      // clearTimeout(autoSaveTimeoutRef.current);
+      // autoSaveTimeoutRef.current = setTimeout(() => {
+      //   if (hasUnsavedChanges) {
+      //     handleSave();
+      //   }
+      // }, 2000); // Auto-save after 2 seconds of inactivity
       
       // Set timeout to send typing stop
       typingTimeoutRef.current = setTimeout(() => {
         socket.emit('typing-stop', {
           roomId,
           userId: currentUser.id,
+          userName: user?.firstName || user?.username || 'Anonymous',
           filePath: selectedFile
         });
       }, 1000);
@@ -580,6 +780,63 @@ export default function EditorPage() {
   };
 
   return (
+    <>
+      {/* Authentication Guard */}
+      <SignedOut>
+        <div className="h-screen flex flex-col items-center justify-center bg-[#0d1117] text-white">
+          <div className="text-center space-y-6 max-w-md">
+            <div className="text-6xl mb-4">🔒</div>
+            <h1 className="text-3xl font-bold">Authentication Required</h1>
+            <p className="text-gray-400">
+              You need to sign in to access the collaborative editor.
+            </p>
+            <div className="space-y-3">
+              <Link href="/sign-in">
+                <Button className="w-full bg-[#2FA1FF] hover:bg-[#2FA1FF]/90 text-white">
+                  Sign In to Continue
+                </Button>
+              </Link>
+              <Link href="/">
+                <Button variant="outline" className="w-full border-gray-600 text-gray-300 hover:bg-gray-800">
+                  Go Home
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </SignedOut>
+
+      <SignedIn>
+        {isCheckingAuth ? (
+          <div className="h-screen flex items-center justify-center bg-[#0d1117] text-white">
+            <div className="text-center space-y-4">
+              <div className="w-8 h-8 border-2 border-[#2FA1FF] border-t-transparent rounded-full animate-spin mx-auto"></div>
+              <p className="text-gray-400">Checking room access...</p>
+            </div>
+          </div>
+        ) : !isAuthorized ? (
+          <div className="h-screen flex flex-col items-center justify-center bg-[#0d1117] text-white">
+            <div className="text-center space-y-6 max-w-md">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h1 className="text-3xl font-bold">Access Denied</h1>
+              <p className="text-gray-400">
+                You don't have permission to access this room. Contact the room owner for an invite.
+              </p>
+              <div className="space-y-3">
+                <Link href="/dashboard">
+                  <Button className="w-full bg-[#2FA1FF] hover:bg-[#2FA1FF]/90 text-white">
+                    Go to Dashboard
+                  </Button>
+                </Link>
+                <Link href="/">
+                  <Button variant="outline" className="w-full border-gray-600 text-gray-300 hover:bg-gray-800">
+                    Go Home
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
     <div className="h-screen flex flex-col bg-[#0d1117]">
       {/* Header */}
       <div className="h-12 bg-[#161b22] border-b border-gray-800 flex items-center justify-between px-4">
@@ -692,6 +949,17 @@ export default function EditorPage() {
                       You're the only one here
                     </div>
                   )}
+                </div>
+                
+                {/* Invite Button */}
+                <div className="p-3 border-t border-gray-700">
+                  <Button 
+                    onClick={() => setShowInviteModal(true)}
+                    className="w-full bg-[#2FA1FF] hover:bg-[#2FA1FF]/90 text-white text-sm"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Invite Users
+                  </Button>
                 </div>
               </div>
             )}
@@ -914,6 +1182,148 @@ export default function EditorPage() {
           )}
         </div>
       </div>
+      
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#161b22] border border-gray-700 rounded-lg w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <h2 className="text-lg font-semibold text-white">Invite Users</h2>
+              <button 
+                onClick={() => setShowInviteModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-4">
+              {/* Invite Mode Toggle */}
+              <div className="flex bg-[#0d1117] rounded-lg p-1 mb-4">
+                <button
+                  onClick={() => setInviteMode('search')}
+                  className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                    inviteMode === 'search' 
+                      ? 'bg-[#2FA1FF] text-white' 
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Search className="w-4 h-4 inline mr-2" />
+                  Search Users
+                </button>
+                <button
+                  onClick={() => setInviteMode('code')}
+                  className={`flex-1 px-3 py-2 rounded text-sm transition-colors ${
+                    inviteMode === 'code' 
+                      ? 'bg-[#2FA1FF] text-white' 
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Copy className="w-4 h-4 inline mr-2" />
+                  Session Code
+                </button>
+              </div>
+              
+              {inviteMode === 'search' ? (
+                <div className="space-y-4">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Input
+                      type="text"
+                      placeholder="Search users by name or email..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        searchUsers(e.target.value);
+                      }}
+                      className="pl-10 bg-[#0d1117] border-gray-600 text-white"
+                    />
+                  </div>
+                  
+                  {/* Search Results */}
+                  <div className="max-h-48 overflow-y-auto space-y-2">
+                    {isSearching ? (
+                      <div className="text-center py-4">
+                        <div className="w-5 h-5 border-2 border-[#2FA1FF] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      </div>
+                    ) : searchResults.length > 0 ? (
+                      searchResults.map(user => (
+                        <div key={user.id} className="flex items-center justify-between p-3 bg-[#0d1117] rounded border border-gray-700">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-[#2FA1FF] flex items-center justify-center text-white text-sm font-semibold">
+                              {user.name?.slice(0, 2).toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <div className="text-white text-sm font-medium">{user.name}</div>
+                              <div className="text-gray-400 text-xs">{user.email}</div>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={() => sendEmailInvite(user)}
+                            disabled={sendingInvites.has(user.id)}
+                            className="bg-[#00ff88] hover:bg-[#00ff88]/90 text-black text-xs px-3 py-1"
+                          >
+                            {sendingInvites.has(user.id) ? (
+                              <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <>
+                                <Mail className="w-3 h-3 mr-1" />
+                                Invite
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      ))
+                    ) : searchQuery.length > 0 ? (
+                      <div className="text-center py-4 text-gray-400">
+                        No users found
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-400">
+                        Start typing to search for users
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-400 text-sm">
+                    Share this session code with others to join:
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      type="text"
+                      value={sessionCode}
+                      readOnly
+                      className="bg-[#0d1117] border-gray-600 text-white font-mono"
+                    />
+                    <Button
+                      onClick={copySessionCode}
+                      className="bg-[#00ff88] hover:bg-[#00ff88]/90 text-black px-3"
+                    >
+                      {copySuccess ? (
+                        <Check className="w-4 h-4" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                  {copySuccess && (
+                    <p className="text-[#00ff88] text-sm">Copied to clipboard!</p>
+                  )}
+                  <p className="text-gray-500 text-xs">
+                    Users can paste this code in the "Join Room" section of their dashboard.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+        )}
+      </SignedIn>
+    </>
   );
 }
