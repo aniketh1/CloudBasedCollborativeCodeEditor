@@ -92,11 +92,9 @@ export default function EditorPage() {
   const [roomUsers, setRoomUsers] = useState([]);
   const [userCursors, setUserCursors] = useState(new Map());
   const [typingUsers, setTypingUsers] = useState(new Set());
-  const [currentUser] = useState({
-    id: `user-${Math.random().toString(36).substr(2, 9)}`,
-    name: `User${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-    avatar: null
-  });
+  
+  // Real user data from Clerk
+  const [currentUser, setCurrentUser] = useState(null);
   const [showUserList, setShowUserList] = useState(true);
   
   // Refs to prevent re-connections
@@ -272,6 +270,15 @@ export default function EditorPage() {
       return;
     }
     
+    // Set real user data from Clerk
+    setCurrentUser({
+      id: user.id,
+      name: user.fullName || user.firstName || user.username || user.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Anonymous',
+      email: user.emailAddresses?.[0]?.emailAddress || '',
+      avatar: user.imageUrl || null,
+      color: `hsl(${Math.abs(user.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 50%)`
+    });
+    
     // Simplified: if user is authenticated, allow access to any room
     // In production, you'd want proper room access control
     console.log('Editor: User authenticated, granting room access to room:', roomId);
@@ -359,10 +366,10 @@ export default function EditorPage() {
 
   // Initialize socket connection - ONLY if authenticated and client-side
   useEffect(() => {
-    if (!roomId || socketRef.current || !isAuthorized || !isClient || !isMounted || !isLoaded) return;
+    if (!roomId || socketRef.current || !isAuthorized || !isClient || !isMounted || !isLoaded || !currentUser) return;
 
     console.log('🚀 Initializing Socket.IO connection for room:', roomId);
-    console.log('🔍 User:', user?.emailAddresses?.[0]?.emailAddress);
+    console.log('🔍 User:', currentUser.name, '(' + currentUser.email + ')');
     setConnectionStatus('connecting');
 
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
@@ -539,9 +546,9 @@ export default function EditorPage() {
       }
     });
 
-    // Enhanced collaboration events
+    // Enhanced collaboration events with better user persistence
     newSocket.on('room-users', (users) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !currentUser) return;
       console.log('👥 Room users updated:', users);
       
       // Handle both array and object cases from backend
@@ -556,18 +563,46 @@ export default function EditorPage() {
         userArray = [];
       }
       
-      setRoomUsers(userArray.filter(user => user.id !== currentUser.id));
+      // Filter out current user and ensure each user has required properties
+      const filteredUsers = userArray
+        .filter(user => user && user.id && user.id !== currentUser.id)
+        .map(user => ({
+          id: user.id,
+          name: user.userName || user.name || 'Unknown User',
+          email: user.userEmail || user.email || '',
+          avatar: user.userAvatar || user.avatar,
+          color: user.userColor || user.color || `hsl(${Math.abs(user.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 50%)`,
+          isActive: user.isActive !== false,
+          lastSeen: user.lastSeen || Date.now()
+        }));
+      
+      setRoomUsers(filteredUsers);
+      console.log('👥 Processed room users:', filteredUsers);
     });
 
     newSocket.on('user-joined', (userData) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || !currentUser) return;
       console.log('👋 User joined:', userData);
-      if (userData && userData.id !== currentUser.id) {
+      
+      if (userData && userData.id && userData.id !== currentUser.id) {
+        const newUser = {
+          id: userData.id,
+          name: userData.userName || userData.name || 'Unknown User',
+          email: userData.userEmail || userData.email || '',
+          avatar: userData.userAvatar || userData.avatar,
+          color: userData.userColor || userData.color || `hsl(${Math.abs(userData.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 50%)`,
+          isActive: true,
+          lastSeen: Date.now()
+        };
+        
         setRoomUsers(prev => {
-          // Ensure prev is an array
+          // Ensure prev is an array and filter out any existing instance of this user
           const currentUsers = Array.isArray(prev) ? prev : [];
-          return [...currentUsers.filter(user => user.id !== userData.id), userData];
+          const filteredUsers = currentUsers.filter(user => user.id !== userData.id);
+          return [...filteredUsers, newUser];
         });
+        
+        console.log('👋 Added user to room:', newUser);
       }
     });
 
@@ -585,6 +620,17 @@ export default function EditorPage() {
         return newCursors;
       });
     });
+
+    // Send periodic heartbeat to maintain presence
+    const heartbeatInterval = setInterval(() => {
+      if (newSocket.connected && currentUser) {
+        newSocket.emit('user-heartbeat', {
+          roomId,
+          userId: currentUser.id,
+          timestamp: Date.now()
+        });
+      }
+    }, 10000); // Send heartbeat every 10 seconds
 
     newSocket.on('user-typing', ({ userId, filePath, isTyping }) => {
       if (!mountedRef.current) return;
@@ -698,24 +744,39 @@ export default function EditorPage() {
       });
     });
 
-    // Send user join event
+    // Send user join event with real Clerk data
     newSocket.emit('user-join', {
       roomId,
       userId: currentUser.id,
       userName: currentUser.name,
-      userAvatar: currentUser.avatar
+      userEmail: currentUser.email,
+      userAvatar: currentUser.avatar,
+      userColor: currentUser.color
     });
 
     // Cleanup
     return () => {
       mountedRef.current = false;
+      
+      // Clear heartbeat interval
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
+      
       if (newSocket) {
         console.log('🧹 Cleaning up socket');
+        // Send user leave event before disconnecting
+        if (currentUser) {
+          newSocket.emit('user-leave', {
+            roomId,
+            userId: currentUser.id
+          });
+        }
         newSocket.disconnect();
       }
       socketRef.current = null;
     };
-  }, [roomId, isAuthorized, isClient, isMounted, user?.emailAddresses, isLoaded]);
+  }, [roomId, isAuthorized, isClient, isMounted, isLoaded, currentUser]);
 
   // Save function
   const handleSave = async () => {
@@ -740,7 +801,7 @@ export default function EditorPage() {
 
   // Collaboration helper functions
   const handleCursorPositionChange = (position, selection) => {
-    if (socket && isConnected && selectedFile) {
+    if (socket && isConnected && selectedFile && currentUser) {
       socket.emit('cursor-position', {
         roomId,
         userId: currentUser.id,
@@ -761,11 +822,11 @@ export default function EditorPage() {
     }
     
     // Send typing start indicator
-    if (socket && isConnected && selectedFile) {
+    if (socket && isConnected && selectedFile && currentUser) {
       socket.emit('typing-start', {
         roomId,
         userId: currentUser.id,
-        userName: user?.firstName || user?.username || 'Anonymous',
+        userName: currentUser.name,
         filePath: selectedFile
       });
       
@@ -773,7 +834,7 @@ export default function EditorPage() {
       socket.emit('code-operation', {
         roomId,
         userId: currentUser.id,
-        userName: user?.firstName || user?.username || 'Anonymous',
+        userName: currentUser.name,
         filePath: selectedFile,
         operation,
         position: editorRef.current?.getPosition(),
@@ -791,12 +852,14 @@ export default function EditorPage() {
       
       // Set timeout to send typing stop
       typingTimeoutRef.current = setTimeout(() => {
-        socket.emit('typing-stop', {
-          roomId,
-          userId: currentUser.id,
-          userName: user?.firstName || user?.username || 'Anonymous',
-          filePath: selectedFile
-        });
+        if (socket && currentUser) {
+          socket.emit('typing-stop', {
+            roomId,
+            userId: currentUser.id,
+            userName: currentUser.name,
+            filePath: selectedFile
+          });
+        }
       }, 1000);
     }
   };
@@ -805,8 +868,8 @@ export default function EditorPage() {
     console.log('📄 Requesting file:', filePath);
     
     // Validate file path and connection
-    if (!filePath || !socket || !isConnected) {
-      console.warn('⚠️ Cannot select file: missing path, socket, or connection');
+    if (!filePath || !socket || !isConnected || !currentUser) {
+      console.warn('⚠️ Cannot select file: missing path, socket, connection, or user data');
       return;
     }
     
@@ -814,7 +877,7 @@ export default function EditorPage() {
     setCurrentLanguage(getLanguageFromFileName(filePath));
     
     // Notify other users about file selection
-    if (socket && isConnected) {
+    if (socket && isConnected && currentUser) {
       socket.emit('file-selected', {
         roomId,
         userId: currentUser.id,
@@ -1044,10 +1107,10 @@ export default function EditorPage() {
                   {/* Current User */}
                   <div className="flex items-center gap-2 p-2 rounded bg-[#00ff88]/10 border border-[#00ff88]/30">
                     <div className="w-6 h-6 rounded-full bg-[#00ff88] flex items-center justify-center text-xs font-semibold text-black">
-                      {currentUser.name.slice(0, 2).toUpperCase()}
+                      {currentUser?.name?.slice(0, 2).toUpperCase() || 'ME'}
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-[#00ff88]">{currentUser.name} (You)</div>
+                      <div className="text-sm font-medium text-[#00ff88]">{currentUser?.name || 'You'} (You)</div>
                       <div className="text-xs text-gray-400">
                         {selectedFile ? `Editing: ${selectedFile.split('/').pop()}` : 'No file selected'}
                       </div>
@@ -1067,7 +1130,7 @@ export default function EditorPage() {
                       <div className="flex-1">
                         <div className="text-sm font-medium text-white">{user.name}</div>
                         <div className="text-xs text-gray-400">
-                          {typingUsers.has(user.id) ? 'Typing...' : 'Online'}
+                          {user.email ? user.email.slice(0, 20) + (user.email.length > 20 ? '...' : '') : 'Online'}
                         </div>
                       </div>
                       <div className={`w-2 h-2 rounded-full ${user.isActive !== false ? 'bg-green-500' : 'bg-gray-500'}`}></div>
