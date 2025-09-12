@@ -9,12 +9,14 @@ import RoomCard from './components/RoomCard';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import ClientOnly from '@/components/ClientOnly';
 import { Folder, FolderOpen, Users, Plus, Code, Clock } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user } = useUser();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     // Only fetch projects if user is authenticated
@@ -53,6 +55,7 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setError(`Failed to load projects: ${error.message}`);
       // Set empty projects array on error to prevent showing loading indefinitely
       setProjects([]);
     } finally {
@@ -77,13 +80,21 @@ export default function DashboardPage() {
   ];
 
   return (
-    <>
-      <SignedOut>
-        <div className="text-center p-10 text-lg">Please sign in to access the dashboard.</div>
-      </SignedOut>
+    <ClientOnly fallback={
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    }>
+      <>
+        <SignedOut>
+          <div className="text-center p-10 text-lg">Please sign in to access the dashboard.</div>
+        </SignedOut>
 
-      <SignedIn>
-        <section className="max-w-7xl mx-auto px-6 py-12">
+        <SignedIn>
+          <section className="max-w-7xl mx-auto px-6 py-12">
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="text-2xl font-bold">
@@ -129,7 +140,27 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            {loading ? (
+            {error ? (
+              <Card className="border-red-500/50 bg-red-50 dark:bg-red-900/20">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-2 text-red-600 dark:text-red-400">
+                    <div className="w-4 h-4 rounded-full bg-red-500"></div>
+                    <span className="font-medium">Error Loading Projects</span>
+                  </div>
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-2">{error}</p>
+                  <Button 
+                    onClick={() => {
+                      setError(null);
+                      fetchProjects();
+                    }}
+                    className="mt-4 bg-red-600 text-white hover:bg-red-700"
+                    size="sm"
+                  >
+                    Try Again
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : loading ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(3)].map((_, i) => (
                   <Card key={i} className="animate-pulse">
@@ -215,6 +246,7 @@ export default function DashboardPage() {
           </div>
         </section>
       </SignedIn>
-    </>
+      </>
+    </ClientOnly>
   );
 }
