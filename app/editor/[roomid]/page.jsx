@@ -33,7 +33,7 @@ export default function EditorPage() {
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [code, setCode] = useState('// Welcome to CodeDev\n// Select a file to start editing...');
+  const [code, setCode] = useState('// Welcome to ColabDev\n// Select a file to start editing...');
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [showTerminal, setShowTerminal] = useState(true);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -584,7 +584,7 @@ export default function EditorPage() {
       {/* Header */}
       <div className="h-12 bg-[#161b22] border-b border-gray-800 flex items-center justify-between px-4">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-white">CodeDev</h1>
+          <h1 className="text-lg font-semibold text-white">ColabDev</h1>
           {project && (
             <span className="text-sm text-gray-400">• {project.name}</span>
           )}
@@ -810,6 +810,7 @@ export default function EditorPage() {
           <div className={`${showTerminal ? 'flex-1' : 'h-full'}`}>
             {selectedFile ? (
               <MonacoEditor
+                key={`${selectedFile}-${editorTheme}`}
                 height="100%"
                 language={currentLanguage}
                 theme={editorTheme}
@@ -868,7 +869,7 @@ export default function EditorPage() {
               <div className="flex items-center justify-center h-full text-gray-500">
                 <div className="text-center">
                   <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-lg font-medium mb-2">Welcome to CodeDev</p>
+                  <p className="text-lg font-medium mb-2">Welcome to ColabDev</p>
                   <p>Select a file from the explorer to start editing</p>
                   {project && (
                     <p className="text-sm text-gray-400 mt-2">
