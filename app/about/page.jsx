@@ -18,94 +18,85 @@ export default function AboutPage() {
       name: "Rohan Raju Navalyal", 
       role: "Backend Developer & System Architect",
       bio: "Specializing in scalable backend systems, database design, and cloud infrastructure.",
-      avatar: "https://ui-avatars.com/api/?name=Rohan+Navalyal&background=00ff88&color=000&size=128",
-      usn: "1BM22IS162"
-    },
-    {
-      name: "Suprit R Sanadi",
-      role: "Cloud Engineer",
-      bio: "Creating intuitive user interfaces and seamless user experiences for collaborative coding.",
-      avatar: "https://ui-avatars.com/api/?name=Suprit+Sanadi&background=ff6b6b&color=fff&size=128",
-      usn: "1BM23IS418"
+      avatar: "https://ui-avatars.com/api/?name=Rohan+Navalyal&background=00FF88&color=000&size=128",
+      usn: "1BM23IS406"
     }
   ];
 
-  const stats = [
-    { icon: Users, value: "3", label: "Team Members" },
-    { icon: Code, value: "1", label: "Major Project" },
-    { icon: Globe, value: "2024-25", label: "Academic Year" },
-    { icon: Star, value: "B.E.", label: "Degree Program" }
+  const coreValues = [
+    {
+      title: "Collaboration First",
+      description: "We believe that the best code is written together. Our platform is designed to make remote collaboration as seamless as working side by side."
+    },
+    {
+      title: "Developer Experience",
+      description: "Every feature is crafted with developers in mind. From syntax highlighting to real-time debugging, we prioritize what makes coding enjoyable."
+    },
+    {
+      title: "Open Innovation",
+      description: "We're committed to open-source principles and making collaborative coding accessible to developers worldwide, regardless of their background."
+    },
+    {
+      title: "Continuous Learning",
+      description: "Our platform evolves with the developer community, incorporating feedback and staying ahead of the latest technologies and practices."
+    }
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background">
       <Navbar />
       
       {/* Hero Section */}
-      <section className="pt-24 pb-16 px-6 bg-gradient-to-br from-[#2FA1FF]/10 to-[#00ff88]/10">
-        <div className="max-w-6xl mx-auto text-center">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-[#2FA1FF] to-[#00ff88] bg-clip-text text-transparent">
+      <section className="py-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-[#2FA1FF] to-[#00ff88] bg-clip-text text-transparent">
             About ColabDev
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
-            ColabDev is a cloud-based collaborative code editor developed as a final year project 
-            at B.M.S. College of Engineering. This platform enables real-time collaborative coding, 
-            making it easier for developers, students, and teams to work together seamlessly.
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 leading-relaxed">
+            Empowering developers worldwide with seamless real-time collaboration tools that make coding together as natural as coding alone.
           </p>
-          <div className="mt-8 text-sm text-gray-500 dark:text-gray-400">
-            <p>A Project by students of Information Science and Engineering</p>
-            <p>B.M.S. College of Engineering, Bengaluru - 2024-25</p>
+          <div className="flex justify-center items-center space-x-8 mb-12">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#2FA1FF]">50K+</div>
+              <div className="text-gray-600 dark:text-gray-400">Lines of Code</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#00ff88]">2+</div>
+              <div className="text-gray-600 dark:text-gray-400">Developers</div>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold text-[#2FA1FF]">∞</div>
+              <div className="text-gray-600 dark:text-gray-400">Possibilities</div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Mission Section */}
-      <section className="py-16 px-6">
+      <section className="py-16 px-6 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="text-4xl font-bold mb-6 text-[#2FA1FF]">Project Overview</h2>
+              <h2 className="text-3xl font-bold mb-6 text-foreground">Our Mission</h2>
               <p className="text-lg text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
-                ColabDev is our final year project for the Bachelor of Engineering in Information Science 
-                and Engineering at B.M.S. College of Engineering. This cloud-based collaborative code editor 
-                addresses the need for seamless real-time collaboration in software development, enabling 
-                multiple developers to work together efficiently on the same codebase.
+                To revolutionize the way developers collaborate by providing a cloud-based platform 
+                that eliminates geographical barriers and makes real-time coding collaboration 
+                accessible to everyone.
               </p>
-              <div className="flex items-center gap-4 text-[#00ff88]">
-                <Heart className="w-6 h-6" />
-                <span className="font-semibold">Guided by Dr. B S Mahalakshmi, Associate Professor</span>
+              <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+                We envision a world where developers can seamlessly work together on projects, 
+                share knowledge, and build innovative solutions regardless of their physical location.
+              </p>
+            </div>
+            <div className="relative">
+              <div className="bg-gradient-to-br from-[#2FA1FF] to-[#00ff88] p-8 rounded-2xl text-white">
+                <Code className="w-12 h-12 mb-4" />
+                <h3 className="text-xl font-semibold mb-3">Real-time Collaboration</h3>
+                <p className="text-blue-100">
+                  Experience synchronized coding with live cursors, instant updates, and seamless communication tools.
+                </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-6">
-              {[
-                { icon: Code, title: "Real-time Coding", desc: "Code together in real-time" },
-                { icon: Users, title: "Team Collaboration", desc: "Seamless team workflows" },
-                { icon: Zap, title: "Instant Setup", desc: "Start coding immediately" },
-                { icon: Globe, title: "Global Access", desc: "Work from anywhere" }
-              ].map((feature, index) => (
-                <div key={index} className="bg-card p-6 rounded-xl border border-border">
-                  <feature.icon className="w-8 h-8 text-[#2FA1FF] mb-3" />
-                  <h3 className="font-semibold mb-2">{feature.title}</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-300">{feature.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section className="py-16 px-6 bg-card">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold text-center mb-12">Growing Community</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, index) => (
-              <div key={index} className="text-center">
-                <stat.icon className="w-12 h-12 text-[#00ff88] mx-auto mb-4" />
-                <div className="text-3xl font-bold text-[#2FA1FF] mb-2">{stat.value}</div>
-                <div className="text-gray-600 dark:text-gray-300">{stat.label}</div>
-              </div>
-            ))}
           </div>
         </div>
       </section>
@@ -113,80 +104,43 @@ export default function AboutPage() {
       {/* Team Section */}
       <section className="py-16 px-6">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-4xl font-bold text-center mb-12">Meet Our Team</h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4 text-foreground">Meet Our Team</h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300">
+              The passionate developers behind ColabDev
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {teamMembers.map((member, index) => (
-              <div key={index} className="bg-card p-8 rounded-xl border border-border text-center hover:shadow-lg transition-shadow">
+              <div key={index} className="bg-card p-6 rounded-xl border border-border text-center">
                 <img 
                   src={member.avatar} 
                   alt={member.name}
                   className="w-24 h-24 rounded-full mx-auto mb-4"
                 />
-                <h3 className="text-xl font-semibold mb-1">{member.name}</h3>
-                <p className="text-sm text-gray-500 mb-2">USN: {member.usn}</p>
-                <p className="text-[#2FA1FF] font-medium mb-4">{member.role}</p>
-                <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{member.bio}</p>
+                <h3 className="text-xl font-semibold mb-2 text-foreground">{member.name}</h3>
+                <p className="text-[#2FA1FF] font-medium mb-2">{member.role}</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-3">{member.usn}</p>
+                <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{member.bio}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Academic Information Section */}
-      <section className="py-16 px-6 bg-gradient-to-r from-[#2FA1FF]/5 to-[#00ff88]/5">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-8">Academic Information</h2>
-          <div className="bg-background p-8 rounded-xl border border-border">
-            <h3 className="text-2xl font-semibold mb-6 text-[#2FA1FF]">B.M.S. College of Engineering</h3>
-            <p className="text-lg text-gray-600 dark:text-gray-300 mb-4">
-              Autonomous Institute, Affiliated to VTU
+      {/* Values Section */}
+      <section className="py-16 px-6 bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4 text-foreground">Our Core Values</h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300">
+              The principles that guide everything we do
             </p>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              Bull Temple Road, Basavanagudi, Bengaluru - 560019
-            </p>
-            <div className="grid md:grid-cols-2 gap-6 text-left">
-              <div>
-                <h4 className="font-semibold text-[#00ff88] mb-2">Project Details</h4>
-                <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                  <li>• Bachelor of Engineering in Information Science and Engineering</li>
-                  <li>• Final Year Project - 2024-25</li>
-                  <li>• Cloud-Based Collaborative Code Editor</li>
-                  <li>• Real-time collaborative development platform</li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-semibold text-[#00ff88] mb-2">Project Guidance</h4>
-                <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-                  <li>• <strong>Guide:</strong> Dr. B S Mahalakshmi</li>
-                  <li>• <strong>Designation:</strong> Associate Professor</li>
-                  <li>• <strong>Department:</strong> Information Science and Engineering</li>
-                  <li>• <strong>Institution:</strong> B.M.S. College of Engineering</li>
-                </ul>
-              </div>
-            </div>
           </div>
-        </div>
-      </section>
-
-      {/* Project Values Section */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-bold mb-8">Project Objectives</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                title: "Real-time Collaboration",
-                description: "Enable multiple developers to work simultaneously on the same codebase with live updates."
-              },
-              {
-                title: "Cloud-based Development",
-                description: "Provide a web-based IDE that eliminates local environment setup requirements."
-              },
-              {
-                title: "Educational Impact",
-                description: "Create a platform that enhances learning and collaboration in academic programming projects."
-              }
-            ].map((value, index) => (
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            {coreValues.map((value, index) => (
               <div key={index} className="bg-card p-6 rounded-xl border border-border">
                 <h3 className="text-xl font-semibold mb-4 text-[#2FA1FF]">{value.title}</h3>
                 <p className="text-gray-600 dark:text-gray-300">{value.description}</p>
