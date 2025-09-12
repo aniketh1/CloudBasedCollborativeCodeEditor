@@ -28,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
+import DebugPanel from '@/components/DebugPanel';
 
 // Dynamic imports for client-side components
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -39,6 +40,10 @@ export default function EditorPage() {
   const { user, isLoaded } = useUser();
   const roomId = params?.roomid;
   
+  // Client-side only flags to prevent hydration issues
+  const [isClient, setIsClient] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  
   // Authentication check
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -46,6 +51,8 @@ export default function EditorPage() {
   // Core state
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected'); // 'disconnected', 'connecting', 'connected'
+  const [terminalStatus, setTerminalStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
   const [project, setProject] = useState(null);
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -233,9 +240,24 @@ export default function EditorPage() {
     }
   });
 
+  // Client-side mount handler to prevent hydration issues
+  useEffect(() => {
+    setIsClient(true);
+    setIsMounted(true);
+    
+    // Set session code when component mounts
+    if (roomId) {
+      setSessionCode(roomId);
+    }
+    
+    return () => {
+      setIsMounted(false);
+    };
+  }, [roomId]);
+
   // Authentication check - must run first
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !isClient) return;
     
     if (!user) {
       setIsAuthorized(false);
@@ -347,45 +369,80 @@ export default function EditorPage() {
     }
   };
 
-  // Initialize socket connection - ONLY if authenticated
+  // Initialize socket connection - ONLY if authenticated and client-side
   useEffect(() => {
-    if (!roomId || socketRef.current || !isAuthorized) return;
+    if (!roomId || socketRef.current || !isAuthorized || !isClient || !isMounted) return;
 
     console.log('🚀 Initializing connection for room:', roomId);
+    setConnectionStatus('connecting');
 
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    console.log('🔗 Connecting to backend:', BACKEND_URL);
+    
     const newSocket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
-      timeout: 5000,
+      timeout: 20000,
+      autoConnect: true,
+      forceNew: false,
+      upgrade: true,
+      rememberUpgrade: true
     });
 
     socketRef.current = newSocket;
     setSocket(newSocket);
 
-    // Connection events
+    // Connection events with detailed logging
     newSocket.on('connect', () => {
       if (!mountedRef.current) return;
-      console.log('✅ Connected to server');
+      console.log('✅ Connected to server, Socket ID:', newSocket.id);
       setIsConnected(true);
+      setConnectionStatus('connected');
+      
+      // Join room after successful connection
+      console.log('🏠 Joining room:', roomId);
       newSocket.emit('join-room', roomId);
     });
 
-    newSocket.on('disconnect', () => {
+    newSocket.on('disconnect', (reason) => {
       if (!mountedRef.current) return;
-      console.log('❌ Disconnected from server');
+      console.log('❌ Disconnected from server. Reason:', reason);
+      setIsConnected(false);
+      setConnectionStatus('disconnected');
+    });
+
+    // Connection error handling
+    newSocket.on('connect_error', (error) => {
+      console.error('🚨 Connection error:', error);
+      setConnectionStatus('disconnected');
       setIsConnected(false);
     });
 
-    // Project data events
+    // Room join confirmation
+    newSocket.on('room-joined', (data) => {
+      if (!mountedRef.current) return;
+      console.log('🏠 Successfully joined room:', data);
+      
+      // Request project data after joining room
+      console.log('📁 Requesting project data...');
+      newSocket.emit('get-project', { roomId });
+    });
+
+    // Project data events - Enhanced for better debugging
     newSocket.on('project-loaded', (data) => {
       if (!mountedRef.current) return;
       console.log('📂 Project loaded:', data);
-      setProject(data.project);
-      setFiles(data.files || []);
-      setIsProjectLoaded(true); // Mark project as loaded
       
-      // Auto-expand folders that have content (recursive)
-      if (data.files && data.files.length > 0) {
+      if (data.project) {
+        setProject(data.project);
+        console.log('✅ Project data set:', data.project);
+      }
+      
+      if (data.files && Array.isArray(data.files)) {
+        setFiles(data.files);
+        setIsProjectLoaded(true);
+        console.log('✅ Files loaded:', data.files.length, 'files');
+        
+        // Auto-expand folders that have content (recursive)
         const foldersToExpand = new Set();
         
         const expandFoldersWithContent = (items) => {
@@ -401,7 +458,24 @@ export default function EditorPage() {
         expandFoldersWithContent(data.files);
         setExpandedFolders(foldersToExpand);
         console.log('📁 Auto-expanded folders:', Array.from(foldersToExpand));
+      } else {
+        console.warn('⚠️ No files received in project-loaded event');
+        setFiles([]);
+        setIsProjectLoaded(true);
       }
+    });
+
+    // Terminal connection event
+    newSocket.on('terminal-ready', (data) => {
+      if (!mountedRef.current) return;
+      console.log('🖥️ Terminal ready:', data);
+      setTerminalStatus('connected');
+    });
+
+    newSocket.on('terminal-error', (error) => {
+      if (!mountedRef.current) return;
+      console.error('🖥️ Terminal error:', error);
+      setTerminalStatus('error');
     });
 
     // File content events
@@ -967,9 +1041,15 @@ export default function EditorPage() {
           
           {/* Connection Status */}
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+            <div className={`w-2 h-2 rounded-full ${
+              connectionStatus === 'connected' ? 'bg-green-500' : 
+              connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+              'bg-red-500'
+            }`} />
             <span className="text-sm text-gray-400">
-              {isConnected ? 'Connected' : 'Disconnected'}
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 
+               'Disconnected'}
             </span>
           </div>
         </div>
@@ -1153,9 +1233,23 @@ export default function EditorPage() {
           {showTerminal && (
             <div className="h-64 bg-[#0d1117] border-t border-gray-800">
               <div className="h-8 bg-[#161b22] border-b border-gray-800 flex items-center justify-between px-3">
-                <div className="flex items-center">
-                  <TerminalIcon className="w-4 h-4 mr-2 text-gray-400" />
-                  <span className="text-xs text-gray-400 uppercase tracking-wider">Terminal</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center">
+                    <TerminalIcon className="w-4 h-4 mr-2 text-gray-400" />
+                    <span className="text-xs text-gray-400 uppercase tracking-wider">Terminal</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      terminalStatus === 'connected' ? 'bg-green-500' : 
+                      terminalStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 
+                      'bg-red-500'
+                    }`} />
+                    <span className="text-xs text-gray-500">
+                      {terminalStatus === 'connected' ? 'Ready' : 
+                       terminalStatus === 'connecting' ? 'Connecting...' : 
+                       'Error'}
+                    </span>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowTerminal(false)}
@@ -1168,13 +1262,18 @@ export default function EditorPage() {
                 {socket && isConnected ? (
                   <XTermWrapper 
                     socket={socket} 
-                    roomId={roomId} 
+                    roomId={roomId}
                     isConnected={isConnected}
                     isProjectLoaded={isProjectLoaded}
+                    onTerminalReady={() => setTerminalStatus('connected')}
+                    onTerminalError={() => setTerminalStatus('error')}
                   />
                 ) : (
-                  <div className="p-4 text-gray-400 text-sm">
-                    Connecting to terminal...
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                      <div className="w-6 h-6 border-2 border-gray-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-sm">Connecting to terminal...</p>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1320,6 +1419,16 @@ export default function EditorPage() {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Debug Panel - Only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <DebugPanel 
+          socket={socket}
+          connectionStatus={connectionStatus}
+          isProjectLoaded={isProjectLoaded}
+          files={files}
+        />
       )}
     </div>
         )}
