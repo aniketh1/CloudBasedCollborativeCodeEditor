@@ -4,7 +4,46 @@
 
 The error `500: INTERNAL_SERVER_ERROR Code: MIDDLEWARE_INVOCATION_FAILED` indicates that the Clerk middleware is failing to execute properly. This is typically caused by missing or incorrect environment variables in production.
 
-## 🔧 IMMEDIATE FIX REQUIRED in Vercel Dashboard
+## � NEW ISSUE: Authentication Loop (Dashboard → Sign-in → Dashboard)
+
+**Current Status**: Middleware is working (no more crashes), but users are being redirected to sign-in even after authentication.
+
+**Likely Causes**:
+1. Environment variables not set in Vercel (most common)
+2. Clerk domain not configured for production
+3. Authentication state not being recognized
+
+## 🧪 DEBUGGING STEPS
+
+### Step 1: Check Vercel Function Logs
+1. Go to Vercel Dashboard → Your Project → Functions
+2. Look for middleware logs showing:
+   ```
+   Middleware: Environment check - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: SET/NOT SET
+   Middleware: Environment check - CLERK_SECRET_KEY: SET/NOT SET
+   ```
+
+### Step 2: Test Without Authentication (Temporary)
+If you need to test dashboard functionality immediately:
+
+1. **Backup current middleware**:
+   ```bash
+   mv middleware.js middleware_auth.js
+   ```
+
+2. **Use bypass middleware**:
+   ```bash
+   cp middleware_bypass.js middleware.js
+   ```
+
+3. **Deploy and test** - Dashboard should work without authentication
+
+4. **Restore authentication** after testing:
+   ```bash
+   mv middleware_auth.js middleware.js
+   ```
+
+### Step 3: Verify Environment Variables Are Actually Set
 
 ### Step 1: Get Production Keys from Clerk
 1. Go to [Clerk Dashboard](https://dashboard.clerk.com/)

@@ -1,11 +1,11 @@
-// Temporary middleware bypass for testing
-// Use this if the main middleware continues to fail
+// Temporary middleware bypass for testing dashboard access
+// Replace your main middleware.js with this content to test if dashboard works without authentication
 
 import { NextResponse } from 'next/server';
 
 export function middleware(request) {
-  // Log the request for debugging
-  console.log('Middleware bypass - Request to:', request.url);
+  console.log('BYPASS Middleware: Request to:', request.url);
+  console.log('BYPASS Middleware: Allowing all requests through for testing');
   
   // Allow all requests to pass through without authentication
   // This is for testing purposes only - not for production use
@@ -19,3 +19,10 @@ export const config = {
     '/(api|trpc)(.*)',
   ],
 };
+
+// INSTRUCTIONS FOR TESTING:
+// 1. Backup your current middleware.js: mv middleware.js middleware_auth.js
+// 2. Copy this content to middleware.js: cp middleware_bypass.js middleware.js  
+// 3. Deploy and test if dashboard works
+// 4. If it works, the issue is with Clerk configuration
+// 5. Restore original: mv middleware_auth.js middleware.js
