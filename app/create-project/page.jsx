@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { FileText, Plus, Code, Terminal, FolderOpen } from 'lucide-react';
+import FolderBrowser from '@/components/FolderBrowser';
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function CreateProjectPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [projectTypes, setProjectTypes] = useState([
     { 
       value: 'react', 
