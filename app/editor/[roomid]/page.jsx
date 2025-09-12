@@ -548,7 +548,7 @@ export default function EditorPage() {
 
     // Enhanced collaboration events with better user persistence
     newSocket.on('room-users', (users) => {
-      if (!mountedRef.current || !currentUser) return;
+      if (!mountedRef.current) return;
       console.log('👥 Room users updated:', users);
       
       // Handle both array and object cases from backend
@@ -557,20 +557,39 @@ export default function EditorPage() {
         userArray = users;
       } else if (users && typeof users === 'object') {
         // If backend sends an object with users property
-        userArray = users.users || [users];
+        userArray = users.users || users.participants || [users];
       } else {
         console.warn('⚠️ Unexpected users format:', users);
         userArray = [];
       }
       
-      // Filter out current user and ensure each user has required properties
+      // Enhanced user processing with better validation
       const filteredUsers = userArray
-        .filter(user => user && user.id && user.id !== currentUser.id)
+        .filter(user => {
+          // More robust user validation
+          if (!user || typeof user !== 'object') {
+            console.warn('⚠️ Invalid user object:', user);
+            return false;
+          }
+          
+          if (!user.id) {
+            console.warn('⚠️ User missing ID:', user);
+            return false;
+          }
+          
+          // Only filter out current user if we have current user data
+          if (currentUser && user.id === currentUser.id) {
+            console.log('👤 Filtering out current user:', user.id);
+            return false;
+          }
+          
+          return true;
+        })
         .map(user => ({
           id: user.id,
-          name: user.userName || user.name || 'Unknown User',
+          name: user.userName || user.name || user.displayName || 'Unknown User',
           email: user.userEmail || user.email || '',
-          avatar: user.userAvatar || user.avatar,
+          avatar: user.userAvatar || user.avatar || user.profileImageUrl,
           color: user.userColor || user.color || `hsl(${Math.abs(user.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % 360}, 70%, 50%)`,
           isActive: user.isActive !== false,
           lastSeen: user.lastSeen || Date.now()
@@ -578,6 +597,7 @@ export default function EditorPage() {
       
       setRoomUsers(filteredUsers);
       console.log('👥 Processed room users:', filteredUsers);
+      console.log('👤 Current user for comparison:', currentUser ? currentUser.id : 'No current user');
     });
 
     newSocket.on('user-joined', (userData) => {
@@ -977,6 +997,18 @@ export default function EditorPage() {
       </div>
     ));
   };
+
+  // Early return for hydration safety
+  if (!isClient || !isMounted) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#0d1117] text-white">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-2 border-[#2FA1FF] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-gray-400">Initializing editor...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
