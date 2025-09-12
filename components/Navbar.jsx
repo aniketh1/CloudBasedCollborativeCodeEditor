@@ -22,11 +22,27 @@ function Navbar() {
         </div>
 
         <div className="flex gap-7 mr-10 items-center">
-          {['Home', 'About', 'Features'].map((item) => (
-            <p key={item} className="bg-[#2FA1FF] w-[120px] text-center font-bold p-2 rounded-lg text-white cursor-pointer">
-              {item}
-            </p>
+          {[
+            { name: 'Home', href: '/' },
+            { name: 'About', href: '/about' },
+            { name: 'Features', href: '/features' }
+          ].map((item) => (
+            <Link key={item.name} href={item.href}>
+              <p className="bg-[#2FA1FF] w-[120px] text-center font-bold p-2 rounded-lg text-white cursor-pointer hover:bg-[#2FA1FF]/90 transition-colors">
+                {item.name}
+              </p>
+            </Link>
           ))}
+          
+          {/* Dashboard Button - Only show when signed in */}
+          <SignedIn>
+            <Link href="/dashboard">
+              <Button className='bg-[#00ff88] w-[120px] text-center font-bold p-2 rounded-lg text-black hover:bg-[#00ff88]/90 cursor-pointer'>
+                Dashboard
+              </Button>
+            </Link>
+          </SignedIn>
+          
           {/* Authentication using clerk */}
           <SignedOut>
             <Link href="/sign-in">
