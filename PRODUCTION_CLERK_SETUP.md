@@ -1,10 +1,10 @@
 # Production Clerk Configuration Guide
 
-## ⚠️ CRITICAL: You are using Clerk development keys in production!
+## ⚠️ CRITICAL: Middleware Error - MIDDLEWARE_INVOCATION_FAILED
 
-The error message "Clerk has been loaded with development keys" indicates that your production deployment is using development environment variables instead of production ones.
+The error `500: INTERNAL_SERVER_ERROR Code: MIDDLEWARE_INVOCATION_FAILED` indicates that the Clerk middleware is failing to execute properly. This is typically caused by missing or incorrect environment variables in production.
 
-## 🔧 Fix Required in Vercel Dashboard
+## 🔧 IMMEDIATE FIX REQUIRED in Vercel Dashboard
 
 ### Step 1: Get Production Keys from Clerk
 1. Go to [Clerk Dashboard](https://dashboard.clerk.com/)
@@ -21,7 +21,7 @@ The error message "Clerk has been loaded with development keys" indicates that y
 4. Add/Update these variables:
 
 ```bash
-# Clerk Production Keys (REQUIRED)
+# Clerk Production Keys (CRITICAL - Must be set for middleware to work)
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_your_production_key_here
 CLERK_SECRET_KEY=sk_live_your_production_secret_here
 
@@ -38,6 +38,8 @@ NEXT_PUBLIC_BACKEND_URL=https://your-backend-api-url.com
 NEXT_PUBLIC_CLERK_DOMAIN=your-custom-domain.com
 ```
 
+⚠️ **IMPORTANT**: Without both `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` properly set, the middleware will fail with `MIDDLEWARE_INVOCATION_FAILED` error.
+
 ### Step 3: Configure Clerk for Production Domain
 1. In Clerk Dashboard, go to **Domains**
 2. Add your production domain: `cloud-based-collborative-code-editor.vercel.app`
@@ -51,15 +53,20 @@ After setting environment variables:
 
 ## 🚨 Current Issues Being Fixed:
 
-### 1. React Hydration Errors
+### 1. Middleware Invocation Failed Error
+- ✅ **Fixed**: Added error handling to middleware to prevent crashes
+- ✅ **Fixed**: Added environment variable validation in middleware
+- ✅ **Fixed**: Added graceful fallback to redirect to sign-in on middleware failure
+
+### 2. React Hydration Errors
 - ✅ **Fixed**: Added `ClientOnly` wrapper for client-side components
 - ✅ **Fixed**: Added `suppressHydrationWarning` to theme provider
 
-### 2. Dashboard 500 Errors
+### 3. Dashboard 500 Errors
 - ✅ **Fixed**: Improved error handling with user-friendly error messages
 - ✅ **Fixed**: Added retry functionality for failed API calls
 
-### 3. Backend API Connection
+### 4. Backend API Connection
 - ⚠️ **Action Required**: Set `NEXT_PUBLIC_BACKEND_URL` to your deployed backend
 - If backend is not deployed yet, API calls will fail gracefully with error messages
 

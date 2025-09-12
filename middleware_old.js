@@ -7,6 +7,15 @@ const isProtectedRoute = createRouteMatcher([
   '/create-project(.*)'
 ]);
 
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+
+// Define protected routes that require authentication
+const isProtectedRoute = createRouteMatcher([
+  '/dashboard(.*)',
+  '/editor(.*)',
+  '/create-project(.*)'
+]);
+
 export default clerkMiddleware((auth, req) => {
   try {
     // Only protect routes if we're in a properly configured environment
