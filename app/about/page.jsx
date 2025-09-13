@@ -10,16 +10,23 @@ export default function AboutPage() {
     {
       name: "Aniket V Korwar",
       role: "Full Stack Developer & Project Lead",
-      bio: "Leading the development of ColabDev with expertise in React, Node.js, and real-time systems.",
+      bio: "Leading the development of ColabDev with expertise in Next.js, React.js, Node.js, and real-time systems.",
       avatar: "https://ui-avatars.com/api/?name=Aniket+Korwar&background=2FA1FF&color=fff&size=128",
       usn: "1BM23IS403"
     },
     {
       name: "Rohan Raju Navalyal", 
-      role: "Backend Developer & System Architect",
+      role: "Data Analyst & System Architect",
       bio: "Specializing in scalable backend systems, database design, and cloud infrastructure.",
       avatar: "https://ui-avatars.com/api/?name=Rohan+Navalyal&background=00FF88&color=000&size=128",
-      usn: "1BM23IS406"
+      usn: "1BM22IS162"
+    },
+    {
+      name: "Suprit Sanadi", 
+      role: "Cloud Engineer",
+      bio: "Dedicated to optimizing cloud deployments and ensuring robust, scalable infrastructure.",
+      avatar: "https://ui-avatars.com/api/?name=Suprit+Sanadi&background=00FF88&color=000&size=128",
+      usn: "1BM23IS416"
     }
   ];
 
