@@ -10,7 +10,7 @@ export default function AboutPage() {
     {
       name: "Aniket V Korwar",
       role: "Full Stack Developer & Project Lead",
-      bio: "Leading the development of ColabDev with expertise in React, Node.js, and real-time systems.",
+      bio: "Leading the development of ColabDev with expertise in Next.js, React.js, Node.js, and real-time systems.",
       avatar: "https://ui-avatars.com/api/?name=Aniket+Korwar&background=2FA1FF&color=fff&size=128",
       usn: "1BM23IS403"
     },
