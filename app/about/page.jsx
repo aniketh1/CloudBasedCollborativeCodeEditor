@@ -16,10 +16,17 @@ export default function AboutPage() {
     },
     {
       name: "Rohan Raju Navalyal", 
-      role: "Backend Developer & System Architect",
+      role: "Data Analyst & System Architect",
       bio: "Specializing in scalable backend systems, database design, and cloud infrastructure.",
       avatar: "https://ui-avatars.com/api/?name=Rohan+Navalyal&background=00FF88&color=000&size=128",
-      usn: "1BM23IS406"
+      usn: "1BM22IS162"
+    },
+    {
+      name: "Suprit Sanadi", 
+      role: "Cloud Engineer",
+      bio: "Dedicated to optimizing cloud deployments and ensuring robust, scalable infrastructure.",
+      avatar: "https://ui-avatars.com/api/?name=Suprit+Sanadi&background=00FF88&color=000&size=128",
+      usn: "1BM23IS416"
     }
   ];
 
