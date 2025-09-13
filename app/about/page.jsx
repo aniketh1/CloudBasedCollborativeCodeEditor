@@ -118,7 +118,7 @@ export default function AboutPage() {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {teamMembers.map((member, index) => (
               <div key={index} className="bg-card p-6 rounded-xl border border-border text-center">
                 <img 
