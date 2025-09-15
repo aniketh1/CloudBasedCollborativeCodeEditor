@@ -741,36 +741,41 @@ export default function EditorPage() {
 
     // ================== ENHANCED COLLABORATIVE FEATURES ==================
     
-    // Real-time content synchronization
+    // Real-time content synchronization - INSTANT updates
     newSocket.on('realtime-content-sync', ({ userId, userName, filePath, content, selection, cursor, timestamp }) => {
-      if (!mountedRef.current || userId === currentUser.id) return;
-      
-      console.log(`🔄 Real-time content from ${userName} in ${filePath} (${content?.length} chars)`);
-      
-      // Only update if it's the currently selected file
-      if (filePath === selectedFile && !collaborativeUpdates) {
-        console.log('📝 Applying real-time content update');
-        setCollaborativeUpdates(true);
-        setCode(content);
-        lastContentRef.current = content;
-        
-        // Reset collaborative updates flag after a brief delay
-        setTimeout(() => {
-          setCollaborativeUpdates(false);
-        }, 50); // Reduced from 100ms to 50ms for faster updates
+      if (!mountedRef.current || userId === currentUser.id) {
+        console.log(`⏭️ Skipping real-time sync from self: ${userId === currentUser.id ? 'same user' : 'not mounted'}`);
+        return;
       }
+      
+      console.log(`🔄 INSTANT real-time content from ${userName} in ${filePath} (${content?.length} chars)`);
       
       // Always store content for when user switches to this file
       setRealtimeContent(prev => {
         const newContent = new Map(prev);
         newContent.set(filePath, content);
+        console.log(`💾 Stored real-time content for ${filePath}`);
         return newContent;
       });
       
-      // Show visual indicator of sync
+      // Only update editor if it's the currently selected file
       if (filePath === selectedFile) {
-        // You could add a brief visual indicator here
-        console.log('✨ Real-time sync applied');
+        console.log(`📝 APPLYING real-time content update to active editor`);
+        
+        // Temporarily disable collaborative updates flag
+        setCollaborativeUpdates(true);
+        
+        // Force update the editor content
+        setCode(content);
+        lastContentRef.current = content;
+        
+        // Reset collaborative updates flag very quickly
+        setTimeout(() => {
+          setCollaborativeUpdates(false);
+          console.log(`✨ Real-time sync complete for ${filePath}`);
+        }, 25); // Even faster - 25ms
+      } else {
+        console.log(`📋 Stored content for ${filePath} (not currently selected)`);
       }
     });
 
@@ -1256,7 +1261,7 @@ export default function EditorPage() {
       return;
     }
     
-    console.log('✏️ Local code change detected, syncing...', { selectedFile, newCode: newCode?.length });
+    console.log(`✏️ Local code change detected (${newCode?.length || 0} chars), sending real-time sync...`);
     
     setCode(newCode || '');
     setHasUnsavedChanges(true);
@@ -1276,8 +1281,6 @@ export default function EditorPage() {
       const position = editor?.getPosition();
       const selection = editor?.getSelection();
       
-      console.log('📡 Emitting real-time sync for:', selectedFile);
-      
       // Send enhanced typing start indicator with line information
       socket.emit('enhanced-typing-start', {
         roomId,
@@ -1289,6 +1292,7 @@ export default function EditorPage() {
       });
 
       // IMMEDIATE real-time content synchronization (without saving)
+      console.log(`📡 Emitting INSTANT real-time sync for: ${selectedFile}`);
       socket.emit('realtime-content-sync', {
         roomId,
         userId: currentUser.id,
@@ -1303,7 +1307,7 @@ export default function EditorPage() {
         timestamp: Date.now()
       });
       
-      // Enhanced code operation with range information
+      // Enhanced code operation with range information (backup sync method)
       socket.emit('code-operation', {
         roomId,
         userId: currentUser.id,
