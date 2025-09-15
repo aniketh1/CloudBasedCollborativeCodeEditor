@@ -398,6 +398,8 @@ export default function EditorPage() {
     newSocket.on('connect', () => {
       if (!mountedRef.current) return;
       console.log('✅ Socket.IO Connected! Socket ID:', newSocket.id);
+      console.log('🔗 Backend URL:', BACKEND_URL);
+      console.log('👤 Current User:', currentUser?.name, currentUser?.id);
       setIsConnected(true);
       setConnectionStatus('connected');
       
@@ -743,10 +745,11 @@ export default function EditorPage() {
     newSocket.on('realtime-content-sync', ({ userId, userName, filePath, content, selection, cursor, timestamp }) => {
       if (!mountedRef.current || userId === currentUser.id) return;
       
-      console.log(`🔄 Real-time content from ${userName} in ${filePath}`);
+      console.log(`🔄 Real-time content from ${userName} in ${filePath} (${content?.length} chars)`);
       
       // Only update if it's the currently selected file
       if (filePath === selectedFile && !collaborativeUpdates) {
+        console.log('📝 Applying real-time content update');
         setCollaborativeUpdates(true);
         setCode(content);
         lastContentRef.current = content;
@@ -754,15 +757,21 @@ export default function EditorPage() {
         // Reset collaborative updates flag after a brief delay
         setTimeout(() => {
           setCollaborativeUpdates(false);
-        }, 100);
+        }, 50); // Reduced from 100ms to 50ms for faster updates
       }
       
-      // Store content for when user switches to this file
+      // Always store content for when user switches to this file
       setRealtimeContent(prev => {
         const newContent = new Map(prev);
         newContent.set(filePath, content);
         return newContent;
       });
+      
+      // Show visual indicator of sync
+      if (filePath === selectedFile) {
+        // You could add a brief visual indicator here
+        console.log('✨ Real-time sync applied');
+      }
     });
 
     // Enhanced typing indicators with line information
@@ -848,54 +857,81 @@ export default function EditorPage() {
       }
     });
 
-    // File operation results
-    newSocket.on('file-created', ({ filePath, success }) => {
+    // File operation results with enhanced feedback
+    newSocket.on('file-created', ({ filePath, success, error }) => {
       if (!mountedRef.current) return;
-      console.log(`✅ File created: ${filePath}`);
-      // Refresh file tree
-      if (socket && isConnected) {
-        socket.emit('refresh-files', { roomId });
-      }
-    });
-
-    newSocket.on('folder-created', ({ folderPath, success }) => {
-      if (!mountedRef.current) return;
-      console.log(`✅ Folder created: ${folderPath}`);
-      // Refresh file tree
-      if (socket && isConnected) {
-        socket.emit('refresh-files', { roomId });
-      }
-    });
-
-    newSocket.on('file-deleted', ({ filePath, success }) => {
-      if (!mountedRef.current) return;
-      console.log(`🗑️ File deleted: ${filePath}`);
       
-      // If the deleted file was selected, clear the editor
-      if (filePath === selectedFile) {
-        setSelectedFile(null);
-        setCode('// Select a file to start editing...');
+      if (success) {
+        console.log(`✅ File created successfully: ${filePath}`);
+        // Refresh file tree
+        if (socket && isConnected) {
+          socket.emit('refresh-files', { roomId });
+        }
+        // You could show a success toast here
+      } else {
+        console.error(`❌ Failed to create file: ${filePath}`, error);
+        alert(`Failed to create file "${filePath}": ${error || 'Unknown error'}`);
       }
+    });
+
+    newSocket.on('folder-created', ({ folderPath, success, error }) => {
+      if (!mountedRef.current) return;
       
-      // Refresh file tree
-      if (socket && isConnected) {
-        socket.emit('refresh-files', { roomId });
+      if (success) {
+        console.log(`✅ Folder created successfully: ${folderPath}`);
+        // Refresh file tree
+        if (socket && isConnected) {
+          socket.emit('refresh-files', { roomId });
+        }
+        // You could show a success toast here
+      } else {
+        console.error(`❌ Failed to create folder: ${folderPath}`, error);
+        alert(`Failed to create folder "${folderPath}": ${error || 'Unknown error'}`);
       }
     });
 
-    newSocket.on('folder-deleted', ({ folderPath, success }) => {
+    newSocket.on('file-deleted', ({ filePath, success, error }) => {
       if (!mountedRef.current) return;
-      console.log(`🗑️ Folder deleted: ${folderPath}`);
-      // Refresh file tree
-      if (socket && isConnected) {
-        socket.emit('refresh-files', { roomId });
+      
+      if (success) {
+        console.log(`✅ File deleted successfully: ${filePath}`);
+        
+        // If the deleted file was selected, clear the editor
+        if (filePath === selectedFile) {
+          setSelectedFile(null);
+          setCode('// Select a file to start editing...');
+          setHasUnsavedChanges(false);
+        }
+        
+        // Refresh file tree
+        if (socket && isConnected) {
+          socket.emit('refresh-files', { roomId });
+        }
+      } else {
+        console.error(`❌ Failed to delete file: ${filePath}`, error);
+        alert(`Failed to delete file "${filePath}": ${error || 'Unknown error'}`);
       }
     });
 
-    newSocket.on('file-operation-error', ({ error, operation }) => {
+    newSocket.on('folder-deleted', ({ folderPath, success, error }) => {
       if (!mountedRef.current) return;
-      console.error(`❌ File operation error (${operation}):`, error);
-      // You could show a toast notification here
+      
+      if (success) {
+        console.log(`✅ Folder deleted successfully: ${folderPath}`);
+        // Refresh file tree
+        if (socket && isConnected) {
+          socket.emit('refresh-files', { roomId });
+        }
+      } else {
+        console.error(`❌ Failed to delete folder: ${folderPath}`, error);
+        alert(`Failed to delete folder "${folderPath}": ${error || 'Unknown error'}`);
+      }
+    });
+
+    newSocket.on('file-operation-error', ({ error, operation, filePath }) => {
+      if (!mountedRef.current) return;
+      console.error(`❌ File operation error (${operation}):`, error, filePath);
+      alert(`File operation failed (${operation}): ${error}`);
     });
 
     // ================== END ENHANCED FEATURES ==================
@@ -1030,30 +1066,58 @@ export default function EditorPage() {
   
   const createFile = (folderPath = '') => {
     const fileName = prompt('Enter file name:');
-    if (!fileName) return;
+    if (!fileName || !fileName.trim()) {
+      console.log('❌ File creation cancelled - no name provided');
+      return;
+    }
     
-    const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
+    const cleanFileName = fileName.trim();
+    const filePath = folderPath ? `${folderPath}/${cleanFileName}` : cleanFileName;
+    
+    console.log('📄 Creating file:', filePath);
     
     if (socket && isConnected && currentUser) {
       socket.emit('create-file', {
         roomId,
         filePath,
-        initialContent: `// ${fileName}\n// Created by ${currentUser.name}\n\n`
+        initialContent: `// ${cleanFileName}\n// Created by ${currentUser.name}\n// ${new Date().toISOString()}\n\n`
       });
+      console.log('📡 Sent create-file request for:', filePath);
+    } else {
+      console.error('❌ Cannot create file - missing requirements:', {
+        socket: !!socket,
+        isConnected,
+        currentUser: !!currentUser
+      });
+      alert('Cannot create file. Please check your connection and try again.');
     }
   };
 
   const createFolder = (parentPath = '') => {
     const folderName = prompt('Enter folder name:');
-    if (!folderName) return;
+    if (!folderName || !folderName.trim()) {
+      console.log('❌ Folder creation cancelled - no name provided');
+      return;
+    }
     
-    const folderPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+    const cleanFolderName = folderName.trim();
+    const folderPath = parentPath ? `${parentPath}/${cleanFolderName}` : cleanFolderName;
+    
+    console.log('📁 Creating folder:', folderPath);
     
     if (socket && isConnected && currentUser) {
       socket.emit('create-folder', {
         roomId,
         folderPath
       });
+      console.log('📡 Sent create-folder request for:', folderPath);
+    } else {
+      console.error('❌ Cannot create folder - missing requirements:', {
+        socket: !!socket,
+        isConnected,
+        currentUser: !!currentUser
+      });
+      alert('Cannot create folder. Please check your connection and try again.');
     }
   };
 
@@ -1061,11 +1125,21 @@ export default function EditorPage() {
     const confirmed = confirm(`Are you sure you want to delete "${filePath}"?`);
     if (!confirmed) return;
     
+    console.log('🗑️ Deleting file:', filePath);
+    
     if (socket && isConnected && currentUser) {
       socket.emit('delete-file', {
         roomId,
         filePath
       });
+      console.log('📡 Sent delete-file request for:', filePath);
+    } else {
+      console.error('❌ Cannot delete file - missing requirements:', {
+        socket: !!socket,
+        isConnected,
+        currentUser: !!currentUser
+      });
+      alert('Cannot delete file. Please check your connection and try again.');
     }
   };
 
@@ -1073,11 +1147,21 @@ export default function EditorPage() {
     const confirmed = confirm(`Are you sure you want to delete folder "${folderPath}" and all its contents?`);
     if (!confirmed) return;
     
+    console.log('🗑️ Deleting folder:', folderPath);
+    
     if (socket && isConnected && currentUser) {
       socket.emit('delete-folder', {
         roomId,
         folderPath
       });
+      console.log('📡 Sent delete-folder request for:', folderPath);
+    } else {
+      console.error('❌ Cannot delete folder - missing requirements:', {
+        socket: !!socket,
+        isConnected,
+        currentUser: !!currentUser
+      });
+      alert('Cannot delete folder. Please check your connection and try again.');
     }
   };
 
@@ -1168,8 +1252,11 @@ export default function EditorPage() {
   const handleCodeChange = (newCode, operation = 'replace') => {
     // Skip if this is a collaborative update to prevent infinite loops
     if (collaborativeUpdates) {
+      console.log('⏭️ Skipping collaborative update to prevent loop');
       return;
     }
+    
+    console.log('✏️ Local code change detected, syncing...', { selectedFile, newCode: newCode?.length });
     
     setCode(newCode || '');
     setHasUnsavedChanges(true);
@@ -1189,6 +1276,8 @@ export default function EditorPage() {
       const position = editor?.getPosition();
       const selection = editor?.getSelection();
       
+      console.log('📡 Emitting real-time sync for:', selectedFile);
+      
       // Send enhanced typing start indicator with line information
       socket.emit('enhanced-typing-start', {
         roomId,
@@ -1198,18 +1287,20 @@ export default function EditorPage() {
         lineNumber: position?.lineNumber || 1,
         position
       });
-      
-      // Real-time content synchronization (without saving)
+
+      // IMMEDIATE real-time content synchronization (without saving)
       socket.emit('realtime-content-sync', {
         roomId,
         userId: currentUser.id,
+        userName: currentUser.name,
         filePath: selectedFile,
         content: newCode,
         selection: selection ? {
           start: { line: selection.startLineNumber, column: selection.startColumn },
           end: { line: selection.endLineNumber, column: selection.endColumn }
         } : null,
-        cursor: position
+        cursor: position,
+        timestamp: Date.now()
       });
       
       // Enhanced code operation with range information
@@ -1233,6 +1324,7 @@ export default function EditorPage() {
       // Set timeout to send enhanced typing stop
       typingTimeoutRef.current = setTimeout(() => {
         if (socket && currentUser) {
+          console.log('⏹️ Sending typing stop for:', selectedFile);
           socket.emit('enhanced-typing-stop', {
             roomId,
             userId: currentUser.id,
@@ -1241,10 +1333,15 @@ export default function EditorPage() {
           });
         }
       }, 1000);
+    } else {
+      console.warn('⚠️ Cannot sync - missing requirements:', {
+        socket: !!socket,
+        isConnected,
+        selectedFile,
+        currentUser: !!currentUser
+      });
     }
-  };
-
-  // Keyboard shortcut for save (Ctrl+S)
+  };  // Keyboard shortcut for save (Ctrl+S)
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.ctrlKey && event.key === 's') {
@@ -1574,6 +1671,16 @@ export default function EditorPage() {
               <div className="w-px h-4 bg-gray-700"></div>
               <div className="flex items-center gap-1 text-xs">
                 <span className="text-gray-400">{selectedFile.split('/').pop()}</span>
+                
+                {/* Connection Status Indicator */}
+                <div className="flex items-center gap-1 ml-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    isConnected ? 'bg-green-500' : 'bg-red-500'
+                  }`} title={`Socket: ${isConnected ? 'Connected' : 'Disconnected'}`}></div>
+                  <span className="text-xs text-gray-500">
+                    {isConnected ? 'Live' : 'Offline'}
+                  </span>
+                </div>
                 
                 {/* Show who's editing this file */}
                 {editingUsers.has(selectedFile) && editingUsers.get(selectedFile).size > 0 && (
