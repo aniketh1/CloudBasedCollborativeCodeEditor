@@ -1359,7 +1359,9 @@ export default function EditorPage() {
         currentUser: !!currentUser
       });
     }
-  };  // Keyboard shortcut for save (Ctrl+S)
+  };
+
+  // Keyboard shortcut for save (Ctrl+S)
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.ctrlKey && event.key === 's') {
