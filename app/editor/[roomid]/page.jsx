@@ -749,6 +749,9 @@ export default function EditorPage() {
       }
       
       console.log(`🔄 INSTANT real-time content from ${userName} in ${filePath} (${content?.length} chars)`);
+      console.log(`📍 Current selected file: "${selectedFile}"`);
+      console.log(`📍 Incoming file path: "${filePath}"`);
+      console.log(`📍 Files match: ${filePath === selectedFile}`);
       
       // Always store content for when user switches to this file
       setRealtimeContent(prev => {
@@ -758,24 +761,23 @@ export default function EditorPage() {
         return newContent;
       });
       
-      // Only update editor if it's the currently selected file
+      // Apply to editor if it's the currently selected file
       if (filePath === selectedFile) {
-        console.log(`📝 APPLYING real-time content update to active editor`);
+        console.log(`📝 APPLYING real-time content update to active editor for ${filePath}`);
         
-        // Temporarily disable collaborative updates flag
-        setCollaborativeUpdates(true);
-        
-        // Force update the editor content
+        // Force apply real-time content regardless of collaborative updates flag
+        // This ensures real-time sync always works
         setCode(content);
         lastContentRef.current = content;
         
-        // Reset collaborative updates flag very quickly
+        // Set collaborative updates flag to prevent echo
+        setCollaborativeUpdates(true);
         setTimeout(() => {
           setCollaborativeUpdates(false);
           console.log(`✨ Real-time sync complete for ${filePath}`);
-        }, 25); // Even faster - 25ms
+        }, 100); // Slightly longer timeout to ensure no conflicts
       } else {
-        console.log(`📋 Stored content for ${filePath} (not currently selected)`);
+        console.log(`📋 Stored content for ${filePath} (currently selected: ${selectedFile})`);
       }
     });
 
@@ -1007,8 +1009,15 @@ export default function EditorPage() {
     };
   }, [roomId, isAuthorized, isClient, isMounted, isLoaded, currentUser]);
 
+  // Debug selectedFile changes
+  useEffect(() => {
+    console.log(`🎯 Selected file changed to: "${selectedFile}"`);
+  }, [selectedFile]);
+
   // Enhanced file selection handler with real-time content
   const handleFileSelect = (filePath) => {
+    console.log(`🎯 HANDLE FILE SELECT: "${selectedFile}" → "${filePath}"`);
+    
     if (!socket || !isConnected || !isProjectLoaded) {
       console.warn('⚠️ Cannot select file: not ready', { socket: !!socket, isConnected, isProjectLoaded });
       return;
@@ -1022,15 +1031,18 @@ export default function EditorPage() {
 
     console.log('📄 Requesting file content for:', filePath);
     setSelectedFile(filePath);
+    console.log(`🔄 setSelectedFile called with: "${filePath}"`);
     setCurrentLanguage(getLanguageFromFileName(filePath));
     
     // Check if we have real-time content for this file
     if (realtimeContent.has(filePath)) {
       const content = realtimeContent.get(filePath);
-      console.log('📄 Loading real-time content for:', filePath);
+      console.log(`📄 Loading real-time content for: ${filePath} (${content?.length} chars)`);
       setCode(content);
       lastContentRef.current = content;
       setHasUnsavedChanges(false); // Real-time content is considered saved
+    } else {
+      console.log(`📄 No real-time content found for: ${filePath}, requesting from server...`);
     }
     
     // Notify other users about file selection
@@ -1040,10 +1052,12 @@ export default function EditorPage() {
         userId: currentUser.id,
         filePath
       });
-      
-      // Request file content with error handling
-      socket.emit('read-file', { roomId, filePath });
     }
+    
+    // Request file content with error handling
+    socket.emit('read-file', { roomId, filePath });
+    console.log(`📡 Sent read-file request for: ${filePath}`);
+  };
   };
 
   // Enhanced save function
