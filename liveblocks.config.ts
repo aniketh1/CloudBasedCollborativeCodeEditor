@@ -2,8 +2,22 @@ import { createClient, LiveMap } from "@liveblocks/client";
 import { createRoomContext } from "@liveblocks/react";
 
 const client = createClient({
-  authEndpoint: "/api/liveblocks-auth",
-  // Optional: You can add other configuration here
+  authEndpoint: async (room) => {
+    const response = await fetch("/api/liveblocks-auth", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ room }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to authenticate");
+    }
+
+    const result = await response.json();
+    return result;
+  },
 });
 
 // Presence represents the properties that exist on every user in the Room
