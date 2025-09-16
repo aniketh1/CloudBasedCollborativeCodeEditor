@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import useCollaboration from '@/hooks/useCollaboration';
 
 // Dynamically import Monaco Editor to avoid SSR issues
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -12,7 +11,7 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400 mx-auto mb-4"></div>
         <p className="text-gray-300 text-lg">Loading Advanced Monaco Editor...</p>
-        <p className="text-gray-500 text-sm mt-2">Initializing IntelliSense, themes, and collaboration features...</p>
+        <p className="text-gray-500 text-sm mt-2">Initializing IntelliSense, themes, and advanced features...</p>
       </div>
     </div>
   )
@@ -46,17 +45,18 @@ const AdvancedMonacoEditor = ({ selectedFile, roomid, onFileContentChange }) => 
   const isRemoteChange = useRef(false);
   const cursorDecorations = useRef([]);
 
-  // Collaboration integration
-  const {
-    isConnected,
-    connectionError,
-    collaborators,
-    myId,
-    documentState,
-    sendCodeUpdate,
-    sendCursorUpdate,
-    getLineNumber
-  } = useCollaboration(roomid);
+  // Temporary placeholder for collaboration (will be enhanced later)
+  const isConnected = false;
+  const connectionError = null;
+  const collaborators = [];
+  const myId = 'user-1';
+  const documentState = null;
+  const sendCodeUpdate = () => {};
+  const sendCursorUpdate = () => {};
+  const getLineNumber = (content, offset) => {
+    if (!content || offset === undefined) return 1;
+    return content.substring(0, offset).split('\n').length;
+  };
 
   // Advanced theme options
   const themes = [
