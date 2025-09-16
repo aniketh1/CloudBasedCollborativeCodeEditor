@@ -40,7 +40,24 @@ export default async function handler(request, response) {
 
     // Authorize the user and return the result
     const { status, body } = await session.authorize();
-    return response.status(status).json(body);
+    
+    // Parse the body if it's a string to ensure proper JSON format
+    let responseBody;
+    if (typeof body === 'string') {
+      try {
+        responseBody = JSON.parse(body);
+      } catch (e) {
+        responseBody = body;
+      }
+    } else {
+      responseBody = body;
+    }
+    
+    // Set proper headers
+    response.setHeader('Content-Type', 'application/json');
+    
+    // Return the response in the correct format
+    return response.status(status).json(responseBody);
   } catch (error) {
     console.error("Liveblocks auth error:", error);
     return response.status(500).json({ 
