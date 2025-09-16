@@ -327,16 +327,18 @@ export default function FileExplorer({
 
     try {
       const userId = 'current-user'; // Replace with actual user ID
-      const endpoint = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/${type}/${roomId}`;
+      const endpoint = type === 'file' 
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/save-file/${roomId}`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/create-folder/${roomId}`;
       
+      const bodyData = type === 'file' 
+        ? { filePath: fullPath, content: '', userId }
+        : { folderPath: fullPath, userId };
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          path: fullPath,
-          userId, 
-          content: type === 'file' ? '' : undefined 
-        })
+        body: JSON.stringify(bodyData)
       });
 
       if (response.ok) {
@@ -353,9 +355,19 @@ export default function FileExplorer({
     if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return;
 
     try {
-      const endpoint = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/${item.type}/${roomId}?path=${encodeURIComponent(item.path)}`;
+      const endpoint = item.type === 'file'
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/delete-file/${roomId}`
+        : `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/delete-folder/${roomId}`;
       
-      const response = await fetch(endpoint, { method: 'DELETE' });
+      const bodyData = item.type === 'file'
+        ? { filePath: item.path }
+        : { folderPath: item.path };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
 
       if (response.ok) {
         await fetchFileStructure();

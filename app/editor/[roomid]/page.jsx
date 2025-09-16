@@ -29,7 +29,12 @@ export default function EditorPage({ params }) {
     
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${params.roomid}?path=${encodeURIComponent(file.path)}`
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/get-file/${params.roomid}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: file.path })
+        }
       );
       const data = await response.json();
       
@@ -56,12 +61,12 @@ export default function EditorPage({ params }) {
     // Auto-save after a short delay (debounced)
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${params.roomid}`,
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/save-file/${params.roomid}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            path: selectedFile.path,
+            filePath: selectedFile.path,
             content: newContent, 
             userId: user.id 
           })
