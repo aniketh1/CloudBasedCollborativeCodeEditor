@@ -3,6 +3,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import useCollaboration from '@/hooks/useCollaboration';
+import AdvancedMonacoEditor from './AdvancedMonacoEditor';
+import CollaborativeFeatures from './CollaborativeFeatures';
+import CodeAnalysisFeatures from './CodeAnalysisFeatures';
+import EnhancedIntelliSense from './EnhancedIntelliSense';
 
 // Dynamically import Monaco Editor to avoid SSR issues
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -17,19 +21,40 @@ const Editor = dynamic(() => import('@monaco-editor/react'), {
   )
 });
 
-const MonacoEditor = ({ selectedFile, roomid }) => {
+const MonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
+  const [showAdvancedEditor, setShowAdvancedEditor] = useState(true);
   const [editorValue, setEditorValue] = useState(`// Welcome to CodeDev Collaborative Editor 🚀
-// Real-time collaboration powered by operational transformation
+// Enhanced with Advanced Features & Real-time Collaboration
 
-console.log("Start collaborating!");
+console.log("Advanced Monaco Editor with full feature set!");
 
-function welcomeMessage() {
-  return "Happy coding with your team! 👨‍💻👩‍💻";
+// Try typing to see:
+// ✨ Enhanced IntelliSense & Auto-complete
+// 🔍 Live Code Analysis & Error Detection  
+// 👥 Real-time Collaborative Features
+// 🎨 Multiple Themes & Customization
+// 📊 Code Metrics & Quality Analysis
+
+function welcomeToAdvancedEditor() {
+  const features = [
+    "Smart Auto-completion",
+    "Real-time Error Detection", 
+    "Collaborative Cursors",
+    "Code Quality Metrics",
+    "Advanced IntelliSense",
+    "Custom Themes & Settings"
+  ];
+  
+  return \`Enjoy coding with \${features.length} enhanced features! 🚀\`;
 }
 
-// Your code here...`);
+// Start collaborating with your team! 👨‍💻👩‍💻
+welcomeToAdvancedEditor();`);
   const [language, setLanguage] = useState('javascript');
+  const [errors, setErrors] = useState([]);
+  const [warnings, setWarnings] = useState([]);
   const editorRef = useRef(null);
+  const monacoRef = useRef(null);
   const isRemoteChange = useRef(false);
   
   // Real collaboration integration
@@ -63,13 +88,12 @@ function welcomeMessage() {
     }
   }, [documentState]);
 
+  // Handle editor mount for both simple and advanced modes
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     
-    // Set VS Code dark theme
-    monaco.editor.setTheme('vs-dark');
-    
-    // Configure editor options for modern VS Code look
+    // Enhanced editor configuration
     editor.updateOptions({
       fontSize: 14,
       fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Consolas, monospace",
@@ -87,7 +111,22 @@ function welcomeMessage() {
       cursorBlinking: 'smooth',
       cursorSmoothCaretAnimation: true,
       smoothScrolling: true,
-      padding: { top: 16, bottom: 16 }
+      padding: { top: 16, bottom: 16 },
+      // Enhanced IntelliSense options
+      suggestOnTriggerCharacters: true,
+      acceptSuggestionOnCommitCharacter: true,
+      acceptSuggestionOnEnter: 'on',
+      tabCompletion: 'on',
+      wordBasedSuggestions: true,
+      quickSuggestions: {
+        other: true,
+        comments: true,
+        strings: true
+      },
+      parameterHints: {
+        enabled: true,
+        cycle: true
+      }
     });
 
     // Handle code changes for collaboration
@@ -146,9 +185,33 @@ function welcomeMessage() {
 
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e] border-l border-[#2d2d30]">
-      {/* Modern VS Code-style Tab Bar */}
+      {/* Enhanced Tab Bar with Editor Mode Toggle */}
       <div className="h-10 bg-[#2d2d30] border-b border-[#3e3e42] flex items-center px-4 shrink-0">
         <div className="flex items-center gap-3">
+          {/* Editor Mode Toggle */}
+          <div className="flex items-center gap-1 bg-[#1e1e1e] rounded-md p-1">
+            <button
+              onClick={() => setShowAdvancedEditor(true)}
+              className={`px-2 py-1 text-xs rounded ${
+                showAdvancedEditor 
+                  ? 'bg-[#0e639c] text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              🚀 Advanced
+            </button>
+            <button
+              onClick={() => setShowAdvancedEditor(false)}
+              className={`px-2 py-1 text-xs rounded ${
+                !showAdvancedEditor 
+                  ? 'bg-[#0e639c] text-white' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              📝 Simple
+            </button>
+          </div>
+          
           {/* File Tab */}
           <div className="flex items-center gap-2 bg-[#1e1e1e] px-3 py-1.5 rounded-sm border border-[#3e3e42]">
             <div className="w-4 h-4 flex items-center justify-center">
@@ -168,6 +231,32 @@ function welcomeMessage() {
             <span>⚡</span>
             <span className="font-medium">{language.toUpperCase()}</span>
           </div>
+          
+          {/* Feature Status Indicators */}
+          {showAdvancedEditor && (
+            <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-1 text-xs text-green-400">
+                <span>🔍</span>
+                <span>Analysis</span>
+              </div>
+              <div className="flex items-center gap-1 text-xs text-blue-400">
+                <span>🧠</span>
+                <span>IntelliSense</span>
+              </div>
+              {errors.length > 0 && (
+                <div className="flex items-center gap-1 text-xs text-red-400">
+                  <span>❌</span>
+                  <span>{errors.length} errors</span>
+                </div>
+              )}
+              {warnings.length > 0 && (
+                <div className="flex items-center gap-1 text-xs text-yellow-400">
+                  <span>⚠️</span>
+                  <span>{warnings.length} warnings</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right side - Collaboration Status */}
@@ -213,45 +302,106 @@ function welcomeMessage() {
         </div>
       </div>
 
-      {/* Monaco Editor */}
+      {/* Enhanced Monaco Editor */}
       <div className="flex-1 relative">
-        <Editor
-          height="100%"
-          language={language}
-          value={editorValue}
-          onChange={handleEditorChange}
-          onMount={handleEditorDidMount}
-          theme="vs-dark"
-          options={{
-            selectOnLineNumbers: true,
-            automaticLayout: true,
-            minimap: { enabled: true },
-            scrollBeyondLastLine: false,
-            fontSize: 14,
-            fontFamily: "'Fira Code', 'JetBrains Mono', Consolas, monospace",
-            fontLigatures: true,
-            lineHeight: 1.6
-          }}
-        />
+        {showAdvancedEditor ? (
+          // Advanced Monaco Editor with all features
+          <AdvancedMonacoEditor
+            value={editorValue}
+            onChange={setEditorValue}
+            language={language}
+            onMount={handleEditorDidMount}
+            collaborators={collaborators}
+            isConnected={isConnected}
+            roomid={roomid}
+            selectedFile={selectedFile}
+            projectFiles={projectFiles}
+          />
+        ) : (
+          // Simple Monaco Editor
+          <Editor
+            height="100%"
+            language={language}
+            value={editorValue}
+            onChange={handleEditorChange}
+            onMount={handleEditorDidMount}
+            theme="vs-dark"
+            options={{
+              selectOnLineNumbers: true,
+              automaticLayout: true,
+              minimap: { enabled: true },
+              scrollBeyondLastLine: false,
+              fontSize: 14,
+              fontFamily: "'Fira Code', 'JetBrains Mono', Consolas, monospace",
+              fontLigatures: true,
+              lineHeight: 1.6
+            }}
+          />
+        )}
         
-        {/* Collaboration Overlay */}
+        {/* Enhanced Feature Overlays */}
+        {showAdvancedEditor && editorRef.current && monacoRef.current && (
+          <>
+            {/* Collaborative Features */}
+            <CollaborativeFeatures
+              editor={editorRef.current}
+              monaco={monacoRef.current}
+              collaborators={collaborators}
+              myId={myId}
+              isConnected={isConnected}
+            />
+            
+            {/* Code Analysis Features */}
+            <CodeAnalysisFeatures
+              editor={editorRef.current}
+              monaco={monacoRef.current}
+              language={language}
+              code={editorValue}
+              onErrorsDetected={setErrors}
+              onWarningsDetected={setWarnings}
+            />
+            
+            {/* Enhanced IntelliSense */}
+            <EnhancedIntelliSense
+              editor={editorRef.current}
+              monaco={monacoRef.current}
+              language={language}
+              projectFiles={projectFiles}
+            />
+          </>
+        )}
+        
+        {/* Collaboration Status Overlay */}
         {isConnected && (
-          <div className="absolute top-4 right-4 bg-[#0e639c] text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg">
-            🔄 Collaborative Mode
+          <div className="absolute top-4 right-4 bg-[#0e639c] text-white px-3 py-1 rounded-full text-xs font-medium shadow-lg flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            🔄 {showAdvancedEditor ? 'Advanced' : 'Simple'} Collaborative Mode
           </div>
         )}
       </div>
 
-      {/* Bottom Status Bar */}
+      {/* Enhanced Status Bar */}
       <div className="h-6 bg-[#007acc] flex items-center justify-between px-4 text-xs text-white shrink-0">
         <div className="flex items-center gap-4">
           <span>Room: {roomid}</span>
           <span>Language: {language}</span>
+          {showAdvancedEditor && (
+            <>
+              <span>Mode: Advanced</span>
+              {errors.length > 0 && <span className="text-red-200">Errors: {errors.length}</span>}
+              {warnings.length > 0 && <span className="text-yellow-200">Warnings: {warnings.length}</span>}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <span>UTF-8</span>
           <span>LF</span>
           <span>Spaces: 2</span>
+          {showAdvancedEditor && (
+            <span className="flex items-center gap-1">
+              🚀 Enhanced Features Active
+            </span>
+          )}
         </div>
       </div>
     </div>
