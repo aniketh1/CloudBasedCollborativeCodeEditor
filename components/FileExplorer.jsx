@@ -232,16 +232,28 @@ export default function FileExplorer({
     
     try {
       setLoading(true);
+      console.log('Fetching file structure for room:', roomId);
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/structure/${roomId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log('File structure response:', data);
       
       if (data.success) {
         // Transform flat structure to tree
         const tree = buildFileTree(data.structure);
         setFiles(tree);
+      } else {
+        console.error('Backend error:', data.error);
+        setFiles([]);
       }
     } catch (error) {
       console.error('Error fetching file structure:', error);
+      setFiles([]);
     } finally {
       setLoading(false);
     }
