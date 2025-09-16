@@ -129,13 +129,17 @@ const CollaborativeEditor = ({
         clearTimeout(typingTimeoutRef.current);
       }
 
-      // Set typing indicator
-      updateMyPresence({ username: 'User' }); // You can replace with actual username
-      
-      // Clear typing indicator after 2 seconds
-      typingTimeoutRef.current = setTimeout(() => {
-        updateMyPresence({ username: null });
-      }, 2000);
+      // Set typing indicator with a simple flag
+      try {
+        updateMyPresence({ isTyping: true });
+        
+        // Clear typing indicator after 2 seconds
+        typingTimeoutRef.current = setTimeout(() => {
+          updateMyPresence({ isTyping: false });
+        }, 2000);
+      } catch (error) {
+        console.warn('Error updating presence:', error);
+      }
     });
 
     // Call parent's onMount handler if provided
@@ -157,13 +161,13 @@ const CollaborativeEditor = ({
   // Monitor connection status
   useEffect(() => {
     if (room) {
-      setIsConnected(room.getConnectionState() === 'connected');
+      // Simple connection status - assume connected when room is available
+      setIsConnected(true);
       
-      const unsubscribe = room.subscribe('connection', (state) => {
-        setIsConnected(state === 'connected');
-      });
-
-      return unsubscribe;
+      // Optional: You can add more sophisticated connection monitoring here
+      // For now, we'll keep it simple and assume connected state
+    } else {
+      setIsConnected(false);
     }
   }, [room]);
 
@@ -209,7 +213,7 @@ const CollaborativeEditor = ({
 
   // Count online users
   const onlineCount = others.length + 1;
-  const typingCount = others.filter(other => other.presence?.username).length;
+  const typingCount = others.filter(other => other.presence?.isTyping).length;
 
   return (
     <div className="h-full relative">
@@ -288,7 +292,7 @@ const CollaborativeEditor = ({
                 <span className="text-gray-300">
                   {info?.name || 'Anonymous'}
                 </span>
-                {presence?.username && (
+                {presence?.isTyping && (
                   <span className="text-green-400 text-xs">typing...</span>
                 )}
               </div>

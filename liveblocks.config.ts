@@ -26,8 +26,8 @@ const client = createClient({
 export type Presence = {
   // cursor represents the user's cursor position
   cursor: { x: number; y: number } | null;
-  // username represents the user's name
-  username: string | null;
+  // isTyping indicates if the user is currently typing
+  isTyping: boolean;
   // selection represents the user's text selection in the editor
   selection: {
     anchor: number;
