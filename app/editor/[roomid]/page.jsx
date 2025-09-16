@@ -160,10 +160,9 @@ export default function EditorPage({ params }) {
                 </div>
               ) : (
                 <MonacoEditor
-                  value={fileContent}
-                  onChange={handleContentChange}
-                  language={selectedFile.language || 'javascript'}
-                  theme="vs-dark"
+                  selectedFile={selectedFile}
+                  roomid={params.roomid}
+                  projectFiles={[]}
                 />
               )}
             </>

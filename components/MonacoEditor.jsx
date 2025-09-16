@@ -4,9 +4,9 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import useCollaboration from '@/hooks/useCollaboration';
 import AdvancedMonacoEditor from './AdvancedMonacoEditor';
-import CollaborativeFeatures from './CollaborativeFeatures';
-import CodeAnalysisFeatures from './CodeAnalysisFeatures';
-import EnhancedIntelliSense from './EnhancedIntelliSense';
+// import CollaborativeFeatures from './CollaborativeFeatures';
+// import CodeAnalysisFeatures from './CodeAnalysisFeatures';
+// import EnhancedIntelliSense from './EnhancedIntelliSense';
 
 // Dynamically import Monaco Editor to avoid SSR issues
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -45,7 +45,7 @@ function welcomeToAdvancedEditor() {
     "Custom Themes & Settings"
   ];
   
-  return \`Enjoy coding with \${features.length} enhanced features! 🚀\`;
+  return "Enjoy coding with " + features.length + " enhanced features! 🚀";
 }
 
 // Start collaborating with your team! 👨‍💻👩‍💻
@@ -339,10 +339,10 @@ welcomeToAdvancedEditor();`);
           />
         )}
         
-        {/* Enhanced Feature Overlays */}
+        {/* Enhanced Feature Overlays - Testing one component at a time */}
+        {/* Temporarily disabled while testing 
         {showAdvancedEditor && editorRef.current && monacoRef.current && (
           <>
-            {/* Collaborative Features */}
             <CollaborativeFeatures
               editor={editorRef.current}
               monaco={monacoRef.current}
@@ -351,7 +351,6 @@ welcomeToAdvancedEditor();`);
               isConnected={isConnected}
             />
             
-            {/* Code Analysis Features */}
             <CodeAnalysisFeatures
               editor={editorRef.current}
               monaco={monacoRef.current}
@@ -361,7 +360,6 @@ welcomeToAdvancedEditor();`);
               onWarningsDetected={setWarnings}
             />
             
-            {/* Enhanced IntelliSense */}
             <EnhancedIntelliSense
               editor={editorRef.current}
               monaco={monacoRef.current}
@@ -370,6 +368,7 @@ welcomeToAdvancedEditor();`);
             />
           </>
         )}
+        */}
         
         {/* Collaboration Status Overlay */}
         {isConnected && (
