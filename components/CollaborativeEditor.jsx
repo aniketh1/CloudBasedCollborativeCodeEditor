@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as Y from 'yjs';
+import { LiveblocksYjsProvider } from '@liveblocks/yjs';
+import { MonacoBinding } from 'y-monaco';
 import { useRoom, useOthers, useUpdateMyPresence } from '@/liveblocks.config';
 import dynamic from 'next/dynamic';
 
@@ -16,11 +19,6 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
   )
 });
 
-const EnhancedIntelliSense = dynamic(() => import('./EnhancedIntelliSense'), {
-  ssr: false,
-  loading: () => null
-});
-
 const CollaborativeEditor = ({ 
   selectedFile, 
   roomid, 
@@ -28,7 +26,8 @@ const CollaborativeEditor = ({
   language = 'javascript',
   theme = 'vs-dark',
   fontSize = 14,
-  onEditorMount
+  onEditorMount,
+  initialContent = ''
 }) => {
   const room = useRoom();
   const others = useOthers();
@@ -36,12 +35,76 @@ const CollaborativeEditor = ({
   
   const [editor, setEditor] = useState(null);
   const [monaco, setMonaco] = useState(null);
-  const [editorValue, setEditorValue] = useState("// Welcome to Real-time Collaborative Editor\n// ✨ All users can edit simultaneously!\n// 🤝 Powered by Liveblocks\n\nconsole.log('Collaborative editing ready!');\n\nfunction collaborate() {\n  return 'Real-time magic!';\n}");
+  const [provider, setProvider] = useState(null);
+  const [binding, setBinding] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [typingUsers, setTypingUsers] = useState(new Set());
+  const [isInitialized, setIsInitialized] = useState(false);
   
+  const ydoc = useRef(null);
+  const ytext = useRef(null);
   const editorRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+
+  // Initialize Yjs document and provider
+  useEffect(() => {
+    if (!room) return;
+
+    try {
+      // Create Yjs document
+      ydoc.current = new Y.Doc();
+      ytext.current = ydoc.current.getText('monaco');
+
+      // Set initial content if provided and document is empty
+      if (initialContent && ytext.current.length === 0) {
+        ytext.current.insert(0, initialContent);
+      }
+
+      // Create Liveblocks provider
+      const liveblocksProvider = new LiveblocksYjsProvider(room, ydoc.current);
+      setProvider(liveblocksProvider);
+
+      // Connection status monitoring
+      liveblocksProvider.on('status', (event) => {
+        setIsConnected(event.status === 'connected');
+      });
+
+      setIsConnected(true);
+      setIsInitialized(true);
+
+      console.log('✅ Yjs document and provider initialized');
+
+      return () => {
+        liveblocksProvider?.destroy();
+        ydoc.current?.destroy();
+      };
+    } catch (error) {
+      console.error('Error initializing Yjs:', error);
+    }
+  }, [room, initialContent]);
+
+  // Setup Monaco binding when editor is ready
+  useEffect(() => {
+    if (!editor || !monaco || !provider || !ytext.current || !isInitialized) return;
+
+    try {
+      // Create Monaco binding for real-time text synchronization
+      const monacoBinding = new MonacoBinding(
+        ytext.current,
+        editor.getModel(),
+        new Set([editor]),
+        provider.awareness
+      );
+
+      setBinding(monacoBinding);
+      console.log('✅ Monaco binding created - Real-time sync active!');
+
+      return () => {
+        monacoBinding?.destroy();
+      };
+    } catch (error) {
+      console.error('Error setting up Monaco binding:', error);
+    }
+  }, [editor, monaco, provider, updateMyPresence, isInitialized]);
 
   // Handle editor mount
   const handleEditorDidMount = useCallback((editorInstance, monacoInstance) => {
@@ -52,10 +115,7 @@ const CollaborativeEditor = ({
     // Enhanced editor configuration
     editorInstance.updateOptions({
       fontSize: fontSize,
-      fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'SF Mono', Consolas, monospace",
-      fontLigatures: true,
-      lineHeight: 1.6,
-      letterSpacing: 0.5,
+      fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace",
       minimap: { enabled: true },
       scrollBeyondLastLine: false,
       wordWrap: 'on',
@@ -64,156 +124,18 @@ const CollaborativeEditor = ({
       insertSpaces: true,
       renderWhitespace: 'selection',
       renderLineHighlight: 'all',
-      cursorBlinking: 'smooth',
-      cursorSmoothCaretAnimation: true,
-      smoothScrolling: true,
-      padding: { top: 16, bottom: 16 },
-      // Enhanced IntelliSense options
-      suggestOnTriggerCharacters: true,
-      acceptSuggestionOnCommitCharacter: true,
-      acceptSuggestionOnEnter: 'on',
-      tabCompletion: 'on',
-      wordBasedSuggestions: true,
-      quickSuggestions: {
-        other: true,
-        comments: true,
-        strings: true
-      },
-      // Advanced features
-      folding: true,
-      foldingStrategy: 'auto',
-      showFoldingControls: 'always',
-      foldingHighlight: true,
-      bracketPairColorization: { enabled: true },
-      guides: {
-        bracketPairs: true,
-        bracketPairsHorizontal: true,
-        highlightActiveBracketPair: true,
-        indentation: true
-      }
+      cursorBlinking: 'smooth'
     });
 
-    // Setup cursor and selection tracking
-    const updatePresence = () => {
-      const selection = editorInstance.getSelection();
-      const position = editorInstance.getPosition();
-      
-      if (selection && position) {
-        updateMyPresence({
-          cursor: {
-            x: position.column,
-            y: position.lineNumber
-          },
-          selection: {
-            anchor: editorInstance.getModel().getOffsetAt({
-              lineNumber: selection.startLineNumber,
-              column: selection.startColumn
-            }),
-            head: editorInstance.getModel().getOffsetAt({
-              lineNumber: selection.endLineNumber,
-              column: selection.endColumn
-            })
-          }
-        });
-      }
-    };
-
-    // Listen for cursor changes
-    const cursorDisposable = editorInstance.onDidChangeCursorPosition(updatePresence);
-    const selectionDisposable = editorInstance.onDidChangeCursorSelection(updatePresence);
-
-    // Listen for content changes to show typing indicators
-    const contentDisposable = editorInstance.onDidChangeModelContent(() => {
-      // Clear existing timeout
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      // Set typing indicator with a simple flag
-      try {
-        updateMyPresence({ isTyping: true });
-        
-        // Clear typing indicator after 2 seconds
-        typingTimeoutRef.current = setTimeout(() => {
-          updateMyPresence({ isTyping: false });
-        }, 2000);
-      } catch (error) {
-        console.warn('Error updating presence:', error);
-      }
-    });
-
-    // Call parent's onMount handler if provided
     if (onEditorMount) {
       onEditorMount(editorInstance, monacoInstance);
     }
 
-    // Cleanup function
-    return () => {
-      cursorDisposable?.dispose();
-      selectionDisposable?.dispose();
-      contentDisposable?.dispose();
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
-  }, [fontSize, onEditorMount, updateMyPresence]);
-
-  // Monitor connection status
-  useEffect(() => {
-    if (room) {
-      // Simple connection status - assume connected when room is available
-      setIsConnected(true);
-      
-      // Optional: You can add more sophisticated connection monitoring here
-      // For now, we'll keep it simple and assume connected state
-    } else {
-      setIsConnected(false);
-    }
-  }, [room]);
-
-  // Handle editor value changes
-  const handleEditorChange = useCallback((value) => {
-    setEditorValue(value || "");
-    // In a full implementation, you would sync this with Yjs/Liveblocks
-    // For now, this is a simplified version
-  }, []);
-
-  // Render collaborator cursors
-  const renderCollaboratorCursors = () => {
-    return others.map(({ connectionId, presence, info }) => {
-      if (!presence?.cursor || !info) return null;
-      
-      const cursorColor = info.color || '#3b82f6';
-      const userName = info.name || 'Anonymous';
-      
-      return (
-        <div
-          key={connectionId}
-          className="absolute pointer-events-none z-50"
-          style={{
-            left: `${presence.cursor.x * 8}px`, // Approximate character width
-            top: `${(presence.cursor.y - 1) * 24}px`, // Approximate line height
-          }}
-        >
-          <div
-            className="w-0.5 h-6 relative"
-            style={{ backgroundColor: cursorColor }}
-          >
-            <div
-              className="absolute -top-8 left-1 px-2 py-1 rounded text-white text-xs whitespace-nowrap"
-              style={{ backgroundColor: cursorColor }}
-            >
-              {userName}
-            </div>
-          </div>
-        </div>
-      );
-    });
-  };
+    console.log('✅ Monaco editor mounted and configured');
+  }, [fontSize, onEditorMount]);
 
   // Count online users
   const onlineCount = others.length + 1;
-  const typingCount = others.filter(other => other.presence?.isTyping).length;
 
   return (
     <div className="h-full relative">
@@ -223,39 +145,22 @@ const CollaborativeEditor = ({
         defaultLanguage={language}
         language={language}
         theme={theme}
-        value={editorValue}
-        onChange={handleEditorChange}
+        value={!isInitialized ? initialContent : undefined}
         onMount={handleEditorDidMount}
         options={{
           fontSize: fontSize,
-          fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace",
+          fontFamily: "'Fira Code', 'JetBrains Mono', monospace",
           minimap: { enabled: true },
           wordWrap: "on",
           automaticLayout: true,
           scrollBeyondLastLine: false,
           renderWhitespace: "selection",
           lineNumbers: "on",
-          folding: true,
-          bracketPairColorization: { enabled: true }
+          folding: true
         }}
       />
 
-      {/* Enhanced IntelliSense */}
-      {editor && monaco && (
-        <EnhancedIntelliSense
-          editor={editor}
-          monaco={monaco}
-          language={language}
-          projectFiles={projectFiles}
-        />
-      )}
-
-      {/* Collaborative cursors overlay */}
-      <div className="absolute inset-0 pointer-events-none">
-        {renderCollaboratorCursors()}
-      </div>
-
-      {/* Collaboration status and user indicators */}
+      {/* Collaboration status */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
         {/* Connection status */}
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
@@ -266,7 +171,7 @@ const CollaborativeEditor = ({
           <div className={`w-2 h-2 rounded-full ${
             isConnected ? 'bg-green-400 animate-pulse' : 'bg-red-400'
           }`} />
-          {isConnected ? 'Connected' : 'Connecting...'}
+          {isConnected ? 'Real-time Sync Active' : 'Connecting...'}
         </div>
 
         {/* Online users */}
@@ -290,7 +195,7 @@ const CollaborativeEditor = ({
                   style={{ backgroundColor: info?.color || '#6b7280' }}
                 />
                 <span className="text-gray-300">
-                  {info?.name || 'Anonymous'}
+                  {info?.name || 'User'}
                 </span>
                 {presence?.isTyping && (
                   <span className="text-green-400 text-xs">typing...</span>
@@ -301,18 +206,30 @@ const CollaborativeEditor = ({
         </div>
       </div>
 
-      {/* Typing indicators */}
-      {typingCount > 0 && (
-        <div className="absolute bottom-4 left-4 bg-gray-800/90 backdrop-blur rounded-lg px-3 py-2 border border-gray-700">
-          <div className="flex items-center gap-2 text-xs text-gray-300">
-            <div className="flex gap-1">
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" />
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-              <div className="w-1 h-1 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+      {/* Debug info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute bottom-4 right-4 bg-gray-800/90 backdrop-blur rounded-lg p-2 border border-gray-700">
+          <div className="text-xs text-gray-400">
+            <div>Room: {roomid}</div>
+            <div>Initialized: {isInitialized ? '✅' : '❌'}</div>
+            <div>Provider: {provider ? '✅' : '❌'}</div>
+            <div>Binding: {binding ? '✅' : '❌'}</div>
+            <div>Y-Doc: {ydoc.current ? '✅' : '❌'}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Welcome message */}
+      {!initialContent && isInitialized && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center p-8 bg-gray-800/80 backdrop-blur rounded-lg border border-gray-700">
+            <h3 className="text-lg font-medium text-gray-200 mb-2">��� Real-time Collaboration Ready!</h3>
+            <p className="text-sm text-gray-400 mb-4">Start typing to see the magic happen.</p>
+            <div className="text-xs text-gray-500">
+              <p>✨ Share this link with others to collaborate in real-time</p>
+              <p>��� All changes are synchronized instantly</p>
+              <p>��� See live cursors and typing indicators</p>
             </div>
-            <span>
-              {typingCount} user{typingCount > 1 ? 's' : ''} typing...
-            </span>
           </div>
         </div>
       )}
