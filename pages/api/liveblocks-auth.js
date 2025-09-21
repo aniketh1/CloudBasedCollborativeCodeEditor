@@ -1,4 +1,5 @@
 import { Liveblocks } from "@liveblocks/node";
+import { auth } from "@clerk/nextjs";
 
 const liveblocks = new Liveblocks({
   secret: process.env.LIVEBLOCKS_SECRET_KEY,
@@ -10,26 +11,43 @@ export default async function handler(request, response) {
   }
 
   try {
-    // Get the current user from your authentication provider
-    // For now, we'll use a mock user - replace this with your actual auth logic
-    const user = {
-      id: "user-" + Math.random().toString(36).substr(2, 9),
-      info: {
-        name: "Anonymous User",
-        avatar: "https://via.placeholder.com/32x32.png?text=AU",
-        color: "#" + Math.floor(Math.random()*16777215).toString(16)
-      }
-    };
+    // Get the current user from Clerk
+    const { userId, user } = auth();
+    
+    // If no user is authenticated, create a guest user
+    let userInfo;
+    if (userId && user) {
+      userInfo = {
+        id: userId,
+        info: {
+          name: user.fullName || user.firstName || 'User',
+          email: user.emailAddresses?.[0]?.emailAddress || '',
+          avatar: user.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullName || 'User')}&background=random`,
+          color: generateUserColor(userId)
+        }
+      };
+    } else {
+      // Guest user for testing
+      const guestId = "guest-" + Math.random().toString(36).substr(2, 9);
+      userInfo = {
+        id: guestId,
+        info: {
+          name: `Guest ${guestId.slice(-4)}`,
+          email: '',
+          avatar: `https://ui-avatars.com/api/?name=Guest&background=random`,
+          color: generateUserColor(guestId)
+        }
+      };
+    }
 
-    // You can also get room access permissions here
-    // For example, check if user has access to the specific room
+    // Get room access permissions
     const roomId = request.body?.room;
     
     // Identify the user and return the result
     const session = liveblocks.prepareSession(
-      user.id,
+      userInfo.id,
       {
-        userInfo: user.info,
+        userInfo: userInfo.info,
       }
     );
 
@@ -65,4 +83,19 @@ export default async function handler(request, response) {
       error: error.message 
     });
   }
+}
+
+// Generate a consistent color for a user based on their ID
+function generateUserColor(userId) {
+  const colors = [
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+    '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#F4D03F'
+  ];
+  
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
 }
