@@ -1,8 +1,13 @@
 import { Liveblocks } from "@liveblocks/node";
 import { auth } from "@clerk/nextjs";
 
+// Check if secret key is configured
+if (!process.env.LIVEBLOCKS_SECRET_KEY) {
+  console.error("❌ LIVEBLOCKS_SECRET_KEY is not configured!");
+}
+
 const liveblocks = new Liveblocks({
-  secret: process.env.LIVEBLOCKS_SECRET_KEY,
+  secret: process.env.LIVEBLOCKS_SECRET_KEY || "sk_dev_placeholder",
 });
 
 export default async function handler(request, response) {
@@ -11,8 +16,26 @@ export default async function handler(request, response) {
   }
 
   try {
+    console.log("🔐 Liveblocks auth request received");
+    
+    // Check if Liveblocks is properly configured
+    if (!process.env.LIVEBLOCKS_SECRET_KEY) {
+      console.error("❌ LIVEBLOCKS_SECRET_KEY not set");
+      return response.status(500).json({ 
+        message: "Liveblocks not configured",
+        error: "LIVEBLOCKS_SECRET_KEY environment variable is missing"
+      });
+    }
+    
     // Get the current user from Clerk
-    const { userId, user } = auth();
+    let userId, user;
+    try {
+      const authResult = auth();
+      userId = authResult?.userId;
+      user = authResult?.user;
+    } catch (authError) {
+      console.log("⚠️ Clerk auth not available, using guest mode:", authError.message);
+    }
     
     // If no user is authenticated, create a guest user
     let userInfo;
@@ -42,6 +65,8 @@ export default async function handler(request, response) {
 
     // Get room access permissions
     const roomId = request.body?.room;
+    console.log("📍 Room ID:", roomId);
+    console.log("👤 User info:", userInfo);
     
     // Identify the user and return the result
     const session = liveblocks.prepareSession(
@@ -58,6 +83,7 @@ export default async function handler(request, response) {
 
     // Authorize the user and return the result
     const { status, body } = await session.authorize();
+    console.log("✅ Liveblocks auth successful, status:", status);
     
     // Parse the body if it's a string to ensure proper JSON format
     let responseBody;
