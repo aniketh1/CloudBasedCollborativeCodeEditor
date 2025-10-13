@@ -88,9 +88,36 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
 
   // Load file content when selectedFile changes
   useEffect(() => {
-    if (selectedFile && selectedFile.path && selectedFile.type === 'file') {
-      setEditorValue(`// Content of ${selectedFile.name}\n// This file is now loaded in the unified collaborative editor\n\nconsole.log('File: ${selectedFile.name}');`);
-    }
+    const fetchFileContent = async () => {
+      if (selectedFile && selectedFile.id && selectedFile.type === 'file') {
+        try {
+          console.log(`📥 Fetching content for file: ${selectedFile.name} (ID: ${selectedFile.id})`);
+          
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`
+          );
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (data.success && data.file) {
+            console.log(`✅ Loaded file content: ${data.file.name} (${data.file.content?.length || 0} chars)`);
+            setEditorValue(data.file.content || '');
+          } else {
+            console.error('❌ Failed to load file content:', data.error);
+            setEditorValue(`// Error loading ${selectedFile.name}\n// ${data.error || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching file content:', error);
+          setEditorValue(`// Error loading ${selectedFile.name}\n// ${error.message}`);
+        }
+      }
+    };
+    
+    fetchFileContent();
   }, [selectedFile]);
 
   const handleEditorDidMount = (editor, monaco) => {
