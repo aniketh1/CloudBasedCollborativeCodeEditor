@@ -124,28 +124,47 @@ export default function CreateProjectPage() {
       
       console.log('🚀 Creating project with cleaned data:', requestData);
       
+      // Add timeout for production cold start handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      
       const response = await fetch(`${BACKEND_URL}/api/projects`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestData),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
       const data = await response.json();
       console.log('📝 Project creation response:', data);
+      console.log('🔍 roomId from response:', data.project?.roomId);
+      console.log('🔍 projectId from response:', data.project?.projectId);
 
       if (data.success) {
-        console.log('✅ Project created successfully, redirecting to:', `/editor/${data.roomId}`);
-        // Redirect to the editor with the new project room
-        router.push(`/editor/${data.roomId}`);
+        // Use roomId for editor route since the route is /editor/[roomid]
+        const editorPath = `/editor/${data.project.roomId || data.project.projectId}`;
+        console.log('✅ Project created successfully, redirecting to:', editorPath);
+        // Redirect to the editor with the new project
+        router.push(editorPath);
       } else {
         console.error('❌ Project creation failed:', data.error);
         setError(data.error || 'Failed to create project');
       }
     } catch (error) {
       console.error('Error creating project:', error);
-      setError('Failed to create project. Please try again.');
+      if (error.name === 'AbortError') {
+        setError('Request timed out. The server may be starting up, please try again in a moment.');
+      } else {
+        setError('Failed to create project. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -294,7 +313,7 @@ export default function CreateProjectPage() {
                 {loading ? (
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    Creating...
+                    Creating project... (Server may be starting up)
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
