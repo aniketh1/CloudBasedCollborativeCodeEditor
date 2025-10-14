@@ -286,6 +286,23 @@ export default function FileExplorer({
       }
     });
 
+    // Auto-select main file on first load (index.js, main.js, app.js, or first .js file)
+    if (files.length > 0 && onSelect) {
+      const mainFile = files.find(f => 
+        f.name === 'index.js' || 
+        f.name === 'main.js' || 
+        f.name === 'app.js' ||
+        f.name === 'index.py' ||
+        f.name === 'main.py'
+      ) || files.find(f => f.name.endsWith('.js')) || files[0];
+      
+      if (mainFile) {
+        console.log(`🎯 Auto-selecting main file: ${mainFile.name}`);
+        // Delay to ensure parent component is ready
+        setTimeout(() => onSelect(mainFile), 100);
+      }
+    }
+
     // Sort items: folders first, then files, alphabetically
     const sortItems = (items) => {
       items.sort((a, b) => {

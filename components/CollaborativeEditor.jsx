@@ -118,24 +118,22 @@ const CollaborativeEditor = ({
         }
       }
       
-      // NOW clear and load new file
+      // NOW clear and load new file - ALWAYS update from S3 (source of truth)
       if (!initialContent) return;
       
-      const newContent = ytext.current.toString();
-      if (newContent !== initialContent) {
-        console.log(`🔄 Updating editor content for file: ${selectedFile?.name}`);
-        
-        // Clear existing content COMPLETELY
-        const currentLength = ytext.current.length;
-        if (currentLength > 0) {
-          ytext.current.delete(0, currentLength);
-        }
-        
-        // Insert new file content
-        if (initialContent) {
-          ytext.current.insert(0, initialContent);
-          lastContentRef.current = initialContent; // Update ref
-        }
+      console.log(`🔄 Loading fresh content for file: ${selectedFile?.name} (${initialContent.length} chars)`);
+      
+      // FORCE clear and reload - S3 is source of truth, not Yjs room
+      const currentLength = ytext.current.length;
+      if (currentLength > 0) {
+        ytext.current.delete(0, currentLength);
+      }
+      
+      // Insert fresh content from S3
+      if (initialContent) {
+        ytext.current.insert(0, initialContent);
+        lastContentRef.current = initialContent; // Update ref
+        console.log(`✅ Loaded fresh content from S3`);
       }
     };
     
