@@ -39,11 +39,15 @@ const CollaborativeEditor = ({
   const [binding, setBinding] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
   
   const ydoc = useRef(null);
   const ytext = useRef(null);
   const editorRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const saveTimeoutRef = useRef(null);
+  const lastContentRef = useRef(initialContent);
 
   // Initialize Yjs document and provider
   useEffect(() => {
@@ -102,6 +106,91 @@ const CollaborativeEditor = ({
       }
     }
   }, [selectedFile?.id, initialContent, isInitialized]);
+
+  // Auto-save function
+  const saveFileContent = useCallback(async (content) => {
+    if (!selectedFile?.id || !content) return;
+    
+    try {
+      setIsSaving(true);
+      console.log(`💾 Auto-saving ${selectedFile.name}...`);
+      
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content }),
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setLastSaved(new Date());
+        lastContentRef.current = content;
+        console.log(`✅ Auto-saved ${selectedFile.name} to ${data.file.storageType}`);
+      } else {
+        console.error('❌ Failed to save:', data.error);
+      }
+    } catch (error) {
+      console.error('❌ Error auto-saving file:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [selectedFile?.id, selectedFile?.name]);
+
+  // Auto-save on content change (debounced)
+  useEffect(() => {
+    if (!ytext.current || !isInitialized || !selectedFile?.id) return;
+
+    const handleContentChange = () => {
+      const currentContent = ytext.current.toString();
+      
+      // Only save if content actually changed
+      if (currentContent === lastContentRef.current) return;
+      
+      // Clear existing timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      // Debounce save for 2 seconds after last change
+      saveTimeoutRef.current = setTimeout(() => {
+        saveFileContent(currentContent);
+      }, 2000);
+    };
+
+    // Listen to Yjs text changes
+    ytext.current.observe(handleContentChange);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      ytext.current?.unobserve(handleContentChange);
+    };
+  }, [isInitialized, selectedFile?.id, saveFileContent]);
+
+  // Save when switching files
+  useEffect(() => {
+    return () => {
+      // Save current content before unmounting or switching files
+      if (ytext.current && selectedFile?.id) {
+        const currentContent = ytext.current.toString();
+        if (currentContent !== lastContentRef.current) {
+          console.log(`💾 Saving ${selectedFile.name} before switching...`);
+          saveFileContent(currentContent);
+        }
+      }
+    };
+  }, [selectedFile?.id, saveFileContent]);
 
   // Setup Monaco binding when editor is ready
   useEffect(() => {
@@ -183,6 +272,26 @@ const CollaborativeEditor = ({
 
       {/* Collaboration status */}
       <div className="absolute top-4 right-4 flex flex-col gap-2">
+        {/* Save status */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+          isSaving
+            ? 'bg-blue-900/50 text-blue-300 border border-blue-500/30'
+            : lastSaved
+            ? 'bg-green-900/50 text-green-300 border border-green-500/30'
+            : 'bg-gray-900/50 text-gray-300 border border-gray-500/30'
+        }`}>
+          <span className="text-lg">
+            {isSaving ? '⏳' : lastSaved ? '✅' : '📝'}
+          </span>
+          <span className="font-medium">
+            {isSaving 
+              ? 'Saving...' 
+              : lastSaved 
+              ? `Saved ${new Date(lastSaved).toLocaleTimeString()}`
+              : 'Not saved'}
+          </span>
+        </div>
+        
         {/* Connection status */}
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
           isConnected 
