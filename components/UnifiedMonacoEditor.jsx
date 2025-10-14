@@ -310,6 +310,7 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
             theme={theme}
             fontSize={fontSize}
             onEditorMount={handleEditorDidMount}
+            initialContent={editorValue}
           />
         </RoomProvider>
       );

@@ -82,6 +82,27 @@ const CollaborativeEditor = ({
     }
   }, [room, initialContent]);
 
+  // Update content when selectedFile changes (file switching)
+  useEffect(() => {
+    if (!ytext.current || !initialContent || !isInitialized) return;
+    
+    // When switching files, replace the entire Yjs document content
+    const currentContent = ytext.current.toString();
+    if (currentContent !== initialContent) {
+      console.log(`🔄 Updating editor content for file: ${selectedFile?.name}`);
+      
+      // Clear existing content
+      if (ytext.current.length > 0) {
+        ytext.current.delete(0, ytext.current.length);
+      }
+      
+      // Insert new file content
+      if (initialContent) {
+        ytext.current.insert(0, initialContent);
+      }
+    }
+  }, [selectedFile?.id, initialContent, isInitialized]);
+
   // Setup Monaco binding when editor is ready
   useEffect(() => {
     if (!editor || !monaco || !provider || !ytext.current || !isInitialized) return;
