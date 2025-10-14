@@ -88,24 +88,36 @@ const CollaborativeEditor = ({
 
   // Update content when selectedFile changes (file switching)
   useEffect(() => {
-    if (!ytext.current || !initialContent || !isInitialized) return;
+    if (!ytext.current || !isInitialized) return;
     
-    // When switching files, replace the entire Yjs document content
+    // SAVE CURRENT FILE BEFORE SWITCHING (if content changed)
     const currentContent = ytext.current.toString();
-    if (currentContent !== initialContent) {
+    if (selectedFile?.id && currentContent && currentContent !== lastContentRef.current) {
+      console.log(`💾 Saving previous file before switching...`);
+      // Immediately save (no debounce) before switching
+      saveFileContent(currentContent);
+    }
+    
+    // NOW clear and load new file
+    if (!initialContent) return;
+    
+    const newContent = ytext.current.toString();
+    if (newContent !== initialContent) {
       console.log(`🔄 Updating editor content for file: ${selectedFile?.name}`);
       
-      // Clear existing content
-      if (ytext.current.length > 0) {
-        ytext.current.delete(0, ytext.current.length);
+      // Clear existing content COMPLETELY
+      const currentLength = ytext.current.length;
+      if (currentLength > 0) {
+        ytext.current.delete(0, currentLength);
       }
       
       // Insert new file content
       if (initialContent) {
         ytext.current.insert(0, initialContent);
+        lastContentRef.current = initialContent; // Update ref
       }
     }
-  }, [selectedFile?.id, initialContent, isInitialized]);
+  }, [selectedFile?.id, initialContent, isInitialized, saveFileContent]);
 
   // Auto-save function
   const saveFileContent = useCallback(async (content) => {
@@ -177,20 +189,6 @@ const CollaborativeEditor = ({
       ytext.current?.unobserve(handleContentChange);
     };
   }, [isInitialized, selectedFile?.id, saveFileContent]);
-
-  // Save when switching files
-  useEffect(() => {
-    return () => {
-      // Save current content before unmounting or switching files
-      if (ytext.current && selectedFile?.id) {
-        const currentContent = ytext.current.toString();
-        if (currentContent !== lastContentRef.current) {
-          console.log(`💾 Saving ${selectedFile.name} before switching...`);
-          saveFileContent(currentContent);
-        }
-      }
-    };
-  }, [selectedFile?.id, saveFileContent]);
 
   // Setup Monaco binding when editor is ready
   useEffect(() => {
