@@ -90,34 +90,57 @@ const CollaborativeEditor = ({
   useEffect(() => {
     if (!ytext.current || !isInitialized) return;
     
-    // SAVE CURRENT FILE BEFORE SWITCHING (if content changed)
-    const currentContent = ytext.current.toString();
-    if (selectedFile?.id && currentContent && currentContent !== lastContentRef.current) {
-      console.log(`💾 Saving previous file before switching...`);
-      // Immediately save (no debounce) before switching
-      saveFileContent(currentContent);
-    }
-    
-    // NOW clear and load new file
-    if (!initialContent) return;
-    
-    const newContent = ytext.current.toString();
-    if (newContent !== initialContent) {
-      console.log(`🔄 Updating editor content for file: ${selectedFile?.name}`);
-      
-      // Clear existing content COMPLETELY
-      const currentLength = ytext.current.length;
-      if (currentLength > 0) {
-        ytext.current.delete(0, currentLength);
+    const handleFileSwitch = async () => {
+      // SAVE CURRENT FILE BEFORE SWITCHING (if content changed)
+      const currentContent = ytext.current.toString();
+      if (selectedFile?.id && currentContent && currentContent !== lastContentRef.current) {
+        console.log(`💾 Saving previous file before switching...`);
+        // Await save to complete before switching
+        try {
+          if (!selectedFile?.id || !currentContent) return;
+          
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ content: currentContent }),
+            }
+          );
+          
+          if (response.ok) {
+            console.log(`✅ Saved previous file before switching`);
+          }
+        } catch (error) {
+          console.error('Error saving before switch:', error);
+        }
       }
       
-      // Insert new file content
-      if (initialContent) {
-        ytext.current.insert(0, initialContent);
-        lastContentRef.current = initialContent; // Update ref
+      // NOW clear and load new file
+      if (!initialContent) return;
+      
+      const newContent = ytext.current.toString();
+      if (newContent !== initialContent) {
+        console.log(`🔄 Updating editor content for file: ${selectedFile?.name}`);
+        
+        // Clear existing content COMPLETELY
+        const currentLength = ytext.current.length;
+        if (currentLength > 0) {
+          ytext.current.delete(0, currentLength);
+        }
+        
+        // Insert new file content
+        if (initialContent) {
+          ytext.current.insert(0, initialContent);
+          lastContentRef.current = initialContent; // Update ref
+        }
       }
-    }
-  }, [selectedFile?.id, initialContent, isInitialized, saveFileContent]);
+    };
+    
+    handleFileSwitch();
+  }, [selectedFile?.id, initialContent, isInitialized]);
 
   // Auto-save function
   const saveFileContent = useCallback(async (content) => {
