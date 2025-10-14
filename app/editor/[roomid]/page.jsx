@@ -27,11 +27,7 @@ export default function EditorPage({ params }) {
     console.log(`Deleted ${type}: ${name}`);
     // Clear editor if deleted file was selected
     if (selectedFile && selectedFile.name === name) {
-      setSelectedFile({
-        name: 'welcome.js',
-        path: 'welcome.js',
-        type: 'file'
-      });
+      setSelectedFile(null); // Clear selection
     }
   };
 
