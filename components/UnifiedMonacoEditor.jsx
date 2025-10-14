@@ -300,11 +300,14 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
 
     if (isCollaborativeMode) {
       // Collaborative Mode - Full-featured editor with real-time collaboration
+      // Use file-specific room to prevent content mixing between files
+      const fileRoomId = selectedFile?.id ? `${roomid}-file-${selectedFile.id}` : roomid;
+      
       return (
-        <RoomProvider id={roomid} initialPresence={{ cursor: null, username: null, selection: null }}>
+        <RoomProvider id={fileRoomId} initialPresence={{ cursor: null, username: null, selection: null }}>
           <CollaborativeEditor
             selectedFile={selectedFile}
-            roomid={roomid}
+            roomid={fileRoomId}
             projectFiles={projectFiles}
             language={language}
             theme={theme}

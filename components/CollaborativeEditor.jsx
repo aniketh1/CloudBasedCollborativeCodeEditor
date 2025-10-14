@@ -49,21 +49,18 @@ const CollaborativeEditor = ({
   const saveTimeoutRef = useRef(null);
   const lastContentRef = useRef(initialContent);
 
-  // Initialize Yjs document and provider
+  // Initialize Yjs document and provider (once per room/file)
   useEffect(() => {
     if (!room) return;
 
     try {
-      // Create Yjs document
+      console.log(`🔧 Initializing Yjs for room: ${room.id}`);
+      
+      // Create fresh Yjs document for this file
       ydoc.current = new Y.Doc();
       ytext.current = ydoc.current.getText('monaco');
 
-      // Set initial content if provided and document is empty
-      if (initialContent && ytext.current.length === 0) {
-        ytext.current.insert(0, initialContent);
-      }
-
-      // Create Liveblocks provider
+      // Create Liveblocks provider for file-specific room
       const liveblocksProvider = new LiveblocksYjsProvider(room, ydoc.current);
       setProvider(liveblocksProvider);
 
@@ -75,70 +72,37 @@ const CollaborativeEditor = ({
       setIsConnected(true);
       setIsInitialized(true);
 
-      console.log('✅ Yjs document and provider initialized');
+      console.log('✅ Yjs document and provider initialized for file');
 
       return () => {
+        console.log(`🧹 Cleaning up Yjs for room: ${room.id}`);
         liveblocksProvider?.destroy();
         ydoc.current?.destroy();
+        setIsInitialized(false);
       };
     } catch (error) {
       console.error('Error initializing Yjs:', error);
     }
-  }, [room, initialContent]);
+  }, [room]); // Only depend on room - reinitialize when file changes
 
-  // Update content when selectedFile changes (file switching)
+  // Load content when file changes or initializes
   useEffect(() => {
-    if (!ytext.current || !isInitialized) return;
+    if (!ytext.current || !isInitialized || !initialContent) return;
     
-    const handleFileSwitch = async () => {
-      // SAVE CURRENT FILE BEFORE SWITCHING (if content changed)
-      const currentContent = ytext.current.toString();
-      if (selectedFile?.id && currentContent && currentContent !== lastContentRef.current) {
-        console.log(`💾 Saving previous file before switching...`);
-        // Await save to complete before switching
-        try {
-          if (!selectedFile?.id || !currentContent) return;
-          
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ content: currentContent }),
-            }
-          );
-          
-          if (response.ok) {
-            console.log(`✅ Saved previous file before switching`);
-          }
-        } catch (error) {
-          console.error('Error saving before switch:', error);
-        }
-      }
-      
-      // NOW clear and load new file - ALWAYS update from S3 (source of truth)
-      if (!initialContent) return;
-      
-      console.log(`🔄 Loading fresh content for file: ${selectedFile?.name} (${initialContent.length} chars)`);
-      
-      // FORCE clear and reload - S3 is source of truth, not Yjs room
-      const currentLength = ytext.current.length;
-      if (currentLength > 0) {
-        ytext.current.delete(0, currentLength);
-      }
-      
-      // Insert fresh content from S3
-      if (initialContent) {
-        ytext.current.insert(0, initialContent);
-        lastContentRef.current = initialContent; // Update ref
-        console.log(`✅ Loaded fresh content from S3`);
-      }
-    };
+    console.log(`� Loading content for file: ${selectedFile?.name} (${initialContent.length} chars)`);
     
-    handleFileSwitch();
-  }, [selectedFile?.id, initialContent, isInitialized]);
+    // Clear any existing content (might be from Liveblocks sync)
+    const currentLength = ytext.current.length;
+    if (currentLength > 0) {
+      ytext.current.delete(0, currentLength);
+    }
+    
+    // Insert fresh content from S3 (source of truth)
+    ytext.current.insert(0, initialContent);
+    lastContentRef.current = initialContent;
+    
+    console.log(`✅ Content loaded from S3`);
+  }, [selectedFile?.id, initialContent, isInitialized, selectedFile?.name]);
 
   // Auto-save function
   const saveFileContent = useCallback(async (content) => {
