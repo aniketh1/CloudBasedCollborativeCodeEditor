@@ -43,7 +43,7 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
 });
 
 const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
-  const [editorValue, setEditorValue] = useState("// Welcome to CodeDev Unified Collaborative Editor\n// ✨ All features integrated: IntelliSense, Real-time Collaboration, Code Analysis\n// 🚀 Start coding with enhanced productivity!\n\nconsole.log('Hello World!');\n\nfunction example() {\n  return 'Advanced Monaco Editor Ready!';\n}");
+  const [editorValue, setEditorValue] = useState(""); // Empty by default - will load from S3
   const [language, setLanguage] = useState("javascript");
   const [showAnalysisMode, setShowAnalysisMode] = useState(false);
   const [theme, setTheme] = useState('vs-dark');
