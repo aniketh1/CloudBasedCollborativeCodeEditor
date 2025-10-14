@@ -9,11 +9,7 @@ import FileExplorer from '@/components/FileExplorer';
 export default function EditorPage({ params }) {
   const { user, isLoaded } = useUser();
   const router = useRouter();
-  const [selectedFile, setSelectedFile] = useState({
-    name: 'welcome.js',
-    path: 'welcome.js',
-    type: 'file'
-  });
+  const [selectedFile, setSelectedFile] = useState(null); // ← No default file
 
   // Handle file selection from explorer
   const handleFileSelect = (file) => {
