@@ -146,7 +146,10 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
         }
 
         // 🌐 STEP 2: Fetch from API only if cache miss or stale
-        console.log(`🌐 Fetching from API: ${selectedFile.name} (cache ${cached ? 'stale' : 'miss'})`);
+        console.log(`🌐 [MonacoEditor] Fetching from API: ${selectedFile.name} (cache ${cached ? 'stale' : 'miss'})`);
+        console.log(`🔍 [MonacoEditor] File ID:`, selectedFile.id);
+        console.log(`🔍 [MonacoEditor] Backend URL:`, process.env.NEXT_PUBLIC_BACKEND_URL);
+        console.log(`🔍 [MonacoEditor] Full URL:`, `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`);
         
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`,
@@ -158,17 +161,32 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
           }
         );
         
+        console.log(`🔍 [MonacoEditor] Response status:`, response.status);
+        console.log(`🔍 [MonacoEditor] Response headers:`, {
+          'content-type': response.headers.get('content-type'),
+          'access-control-allow-origin': response.headers.get('access-control-allow-origin')
+        });
+        
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('❌ [MonacoEditor] HTTP error response:', errorText);
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
         
         const data = await response.json();
+        
+        console.log(`✅ [MonacoEditor] API response:`, {
+          success: data.success,
+          hasFile: !!data.file,
+          fileName: data.file?.name,
+          contentLength: data.file?.content?.length || 0
+        });
         
         if (data.success && data.file) {
           const fileContent = data.file.content || '';
           const fileVersion = data.file.version || 0;
           
-          console.log(`✅ API loaded: ${data.file.name} (v${fileVersion}, ${fileContent.length} chars)`);
+          console.log(`✅ [MonacoEditor] API loaded: ${data.file.name} (v${fileVersion}, ${fileContent.length} chars)`);
           
           // Update cache with fetched content
           updateCache(selectedFile.id, fileContent, fileVersion, data.file.userId);
@@ -178,15 +196,26 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
           if (!latestCached || latestCached.version <= fileVersion) {
             setEditorValue(fileContent);
           } else {
-            console.log(`⚠️ Newer version in cache, using cached content instead`);
+            console.log(`⚠️ [MonacoEditor] Newer version in cache, using cached content instead`);
             setEditorValue(latestCached.content);
           }
         } else {
-          console.error('❌ Failed to load file:', data.error);
+          console.error('❌ [MonacoEditor] Failed to load file:', data.error);
           setEditorValue(`// Error loading ${selectedFile.name}\n// ${data.error || 'Unknown error'}`);
         }
       } catch (error) {
-        console.error('❌ Error loading file:', error);
+        console.error('❌ [MonacoEditor] Error loading file:', error);
+        console.error('❌ [MonacoEditor] Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+        
+        // Check if it's a CORS error
+        if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+          console.error('🚨 [MonacoEditor] Possible CORS error - check browser console Network tab');
+        }
+        
         setEditorValue(`// Error loading ${selectedFile.name}\n// ${error.message}\n\n// Check console for details`);
       } finally {
         clearPendingUpdate(selectedFile.id);
