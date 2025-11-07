@@ -232,27 +232,49 @@ export default function FileExplorer({
     
     try {
       setLoading(true);
-      console.log('Fetching file structure for room:', roomId);
+      console.log('🔍 [FileExplorer] Fetching file structure for room:', roomId);
+      console.log('🔍 [FileExplorer] Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+      console.log('🔍 [FileExplorer] Full URL:', `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/structure/${roomId}`);
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/structure/${roomId}`);
       
+      console.log('🔍 [FileExplorer] Response status:', response.status);
+      console.log('🔍 [FileExplorer] Response headers:', {
+        'content-type': response.headers.get('content-type'),
+        'access-control-allow-origin': response.headers.get('access-control-allow-origin')
+      });
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ [FileExplorer] HTTP error response:', errorText);
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
       }
       
       const data = await response.json();
-      console.log('File structure response:', data);
+      console.log('✅ [FileExplorer] File structure response:', data);
       
       if (data.success) {
         // Transform flat structure to tree
         const tree = buildFileTree(data.structure);
+        console.log('🌳 [FileExplorer] Built file tree with', tree.length, 'root items');
         setFiles(tree);
       } else {
-        console.error('Backend error:', data.error);
+        console.error('❌ [FileExplorer] Backend error:', data.error);
         setFiles([]);
       }
     } catch (error) {
-      console.error('Error fetching file structure:', error);
+      console.error('❌ [FileExplorer] Error fetching file structure:', error);
+      console.error('❌ [FileExplorer] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      
+      // Check if it's a CORS error
+      if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
+        console.error('🚨 [FileExplorer] Possible CORS error - check browser console Network tab');
+      }
+      
       setFiles([]);
     } finally {
       setLoading(false);
