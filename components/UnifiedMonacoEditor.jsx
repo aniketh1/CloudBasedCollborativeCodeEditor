@@ -2,6 +2,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import io from 'socket.io-client';
+
+// Import custom hooks
+import { useFileCache } from '@/hooks/useFileCache';
 
 // Import Liveblocks components
 import { RoomProvider } from '@/liveblocks.config';
@@ -43,16 +47,43 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
 });
 
 const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
-  const [editorValue, setEditorValue] = useState(""); // Empty by default - will load from S3
+  const [editorValue, setEditorValue] = useState(""); // Empty by default - will load from cache or S3
   const [language, setLanguage] = useState("javascript");
   const [showAnalysisMode, setShowAnalysisMode] = useState(false);
   const [theme, setTheme] = useState('vs-dark');
   const [fontSize, setFontSize] = useState(14);
   const [showSettings, setShowSettings] = useState(false);
   const [isCollaborativeMode, setIsCollaborativeMode] = useState(true);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
   
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
+  const socketRef = useRef(null);
+  
+  // Initialize socket connection
+  useEffect(() => {
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+    socketRef.current = io(BACKEND_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Initialize file cache with socket
+  const {
+    getCachedFile,
+    updateCache,
+    hasFreshCache,
+    markPendingUpdate,
+    clearPendingUpdate,
+    hasPendingUpdate
+  } = useFileCache(roomid, socketRef.current);
 
   // Theme options
   const themes = [
@@ -86,39 +117,126 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
     }
   }, [selectedFile]);
 
-  // Load file content when selectedFile changes
+  // ⚡ NEW: Cache-first file loading to prevent template overwrites
   useEffect(() => {
-    const fetchFileContent = async () => {
-      if (selectedFile && selectedFile.id && selectedFile.type === 'file') {
-        try {
-          console.log(`📥 Fetching content for file: ${selectedFile.name} (ID: ${selectedFile.id})`);
-          
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`
-          );
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const data = await response.json();
-          
-          if (data.success && data.file) {
-            console.log(`✅ Loaded file content: ${data.file.name} (${data.file.content?.length || 0} chars)`);
-            setEditorValue(data.file.content || '');
-          } else {
-            console.error('❌ Failed to load file content:', data.error);
-            setEditorValue(`// Error loading ${selectedFile.name}\n// ${data.error || 'Unknown error'}`);
-          }
-        } catch (error) {
-          console.error('❌ Error fetching file content:', error);
-          setEditorValue(`// Error loading ${selectedFile.name}\n// ${error.message}`);
+    const loadFileContent = async () => {
+      if (!selectedFile?.id || selectedFile.type !== 'file') {
+        return;
+      }
+
+      // Prevent loading if already pending
+      if (hasPendingUpdate(selectedFile.id)) {
+        console.log(`⏳ File ${selectedFile.name} has pending update, skipping load`);
+        return;
+      }
+
+      setIsLoadingFile(true);
+      markPendingUpdate(selectedFile.id);
+
+      try {
+        // 🚀 STEP 1: Check cache FIRST (from real-time updates)
+        const cached = getCachedFile(selectedFile.id);
+        
+        if (cached && hasFreshCache(selectedFile.id)) {
+          console.log(`� Using cached content for ${selectedFile.name} (v${cached.version}, ${cached.content?.length || 0} chars)`);
+          setEditorValue(cached.content || '');
+          clearPendingUpdate(selectedFile.id);
+          setIsLoadingFile(false);
+          return;
         }
+
+        // 🌐 STEP 2: Fetch from API only if cache miss or stale
+        console.log(`🌐 Fetching from API: ${selectedFile.name} (cache ${cached ? 'stale' : 'miss'})`);
+        
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/filesystem/file/${selectedFile.id}`,
+          {
+            headers: {
+              'Cache-Control': 'no-cache',
+              'Pragma': 'no-cache'
+            }
+          }
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.file) {
+          const fileContent = data.file.content || '';
+          const fileVersion = data.file.version || 0;
+          
+          console.log(`✅ API loaded: ${data.file.name} (v${fileVersion}, ${fileContent.length} chars)`);
+          
+          // Update cache with fetched content
+          updateCache(selectedFile.id, fileContent, fileVersion, data.file.userId);
+          
+          // Only update editor if we don't have newer cached content
+          const latestCached = getCachedFile(selectedFile.id);
+          if (!latestCached || latestCached.version <= fileVersion) {
+            setEditorValue(fileContent);
+          } else {
+            console.log(`⚠️ Newer version in cache, using cached content instead`);
+            setEditorValue(latestCached.content);
+          }
+        } else {
+          console.error('❌ Failed to load file:', data.error);
+          setEditorValue(`// Error loading ${selectedFile.name}\n// ${data.error || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('❌ Error loading file:', error);
+        setEditorValue(`// Error loading ${selectedFile.name}\n// ${error.message}\n\n// Check console for details`);
+      } finally {
+        clearPendingUpdate(selectedFile.id);
+        setIsLoadingFile(false);
       }
     };
     
-    fetchFileContent();
-  }, [selectedFile]);
+    loadFileContent();
+  }, [selectedFile, getCachedFile, hasFreshCache, updateCache, markPendingUpdate, clearPendingUpdate, hasPendingUpdate]);
+
+  const handleEditorChange = (value) => {
+    setEditorValue(value || "");
+    
+    // Update cache with new content (optimistic update)
+    if (selectedFile?.id && value !== undefined) {
+      const cached = getCachedFile(selectedFile.id);
+      const newVersion = cached ? cached.version + 1 : 1;
+      updateCache(selectedFile.id, value, newVersion, 'current-user');
+    }
+  };
+
+  // 🔄 Listen for real-time updates from other users
+  useEffect(() => {
+    if (!socketRef.current || !roomid) return;
+
+    const handleCodeUpdate = (data) => {
+      const { fileName, content, version, userId, fileId } = data;
+      
+      console.log(`🔄 Real-time update: ${fileName} (v${version}) from user ${userId}`);
+      
+      // Update cache with latest content
+      if (fileId) {
+        updateCache(fileId, content, version, userId);
+        
+        // If this is the currently open file, update editor
+        if (selectedFile?.id === fileId) {
+          console.log(`📝 Updating currently open file: ${fileName}`);
+          setEditorValue(content);
+        }
+      }
+    };
+
+    socketRef.current.on('code-update', handleCodeUpdate);
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.off('code-update', handleCodeUpdate);
+      }
+    };
+  }, [socketRef, roomid, selectedFile, updateCache]);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -174,9 +292,7 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
     });
   };
 
-  const handleEditorChange = (value) => {
-    setEditorValue(value || "");
-  };
+  // Removed duplicate - handleEditorChange is defined earlier with cache update logic
 
   const SettingsPanel = () => (
     <div className="absolute top-16 right-4 bg-gray-800 rounded-lg p-4 shadow-xl z-50 min-w-[300px]">
