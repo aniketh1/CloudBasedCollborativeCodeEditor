@@ -45,3 +45,4 @@ next-env.d.ts
 
 # NPM cache
 Usersanike.npm-cache/
+*.har
