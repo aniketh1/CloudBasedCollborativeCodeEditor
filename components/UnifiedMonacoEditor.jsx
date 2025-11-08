@@ -6,6 +6,7 @@ import io from 'socket.io-client';
 
 // Import custom hooks
 import { useFileCache } from '@/hooks/useFileCache';
+import { RoomProvider } from '@/liveblocks.config';
 
 
 
