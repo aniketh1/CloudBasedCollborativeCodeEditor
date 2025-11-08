@@ -89,10 +89,25 @@ export const useFileCache = (roomId, socket) => {
   }, []);
 
   /**
-   * Check if file has pending update
+   * Check if file has pending update (and it's not stale)
    */
   const hasPendingUpdate = useCallback((fileId) => {
-    return pendingUpdates.has(fileId);
+    const pendingTime = pendingUpdates.get(fileId);
+    if (!pendingTime) return false;
+    
+    // Consider pending update stale after 5 seconds
+    const age = Date.now() - pendingTime;
+    if (age > 5000) {
+      // Auto-clear stale pending updates
+      setPendingUpdates(prev => {
+        const updated = new Map(prev);
+        updated.delete(fileId);
+        return updated;
+      });
+      return false;
+    }
+    
+    return true;
   }, [pendingUpdates]);
 
   /**
