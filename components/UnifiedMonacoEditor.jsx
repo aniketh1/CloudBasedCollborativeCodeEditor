@@ -240,7 +240,7 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
 
   // 🔄 Listen for real-time updates from other users
   useEffect(() => {
-    if (!socketRef.current || !roomid) return;
+    if (!socket || !roomid) return;
 
     const handleCodeUpdate = (data) => {
       const { fileName, content, version, userId, fileId } = data;
@@ -259,14 +259,16 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
       }
     };
 
-    socketRef.current.on('code-update', handleCodeUpdate);
+    if (socket) {
+      socket.on('code-update', handleCodeUpdate);
+    }
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.off('code-update', handleCodeUpdate);
+      if (socket) {
+        socket.off('code-update', handleCodeUpdate);
       }
     };
-  }, [socketRef, roomid, selectedFile, updateCache]);
+  }, [socket, roomid, selectedFile, updateCache]);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
