@@ -7,8 +7,7 @@ import io from 'socket.io-client';
 // Import custom hooks
 import { useFileCache } from '@/hooks/useFileCache';
 
-// Import Liveblocks components
-import { RoomProvider } from '@/liveblocks.config';
+
 
 // Dynamic imports for heavy components
 const EnhancedIntelliSense = dynamic(() => import('./EnhancedIntelliSense'), {
@@ -58,19 +57,21 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
   
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
   
   // Initialize socket connection
   useEffect(() => {
     const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-    socketRef.current = io(BACKEND_URL, {
+    const newSocket = io(BACKEND_URL, {
       transports: ['websocket', 'polling'],
       reconnection: true
     });
+    
+    setSocket(newSocket);
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+      if (newSocket) {
+        newSocket.disconnect();
       }
     };
   }, []);
@@ -83,7 +84,7 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
     markPendingUpdate,
     clearPendingUpdate,
     hasPendingUpdate
-  } = useFileCache(roomid, socketRef.current);
+  } = useFileCache(roomid, socket);
 
   // Theme options
   const themes = [
