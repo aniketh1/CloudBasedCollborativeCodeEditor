@@ -126,14 +126,10 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
         return;
       }
 
-      // Prevent loading if already pending
-      if (hasPendingUpdate(selectedFile.id)) {
-        console.log(`⏳ File ${selectedFile.name} has pending update, skipping load`);
-        return;
-      }
-
+      // REMOVED: Pending update check was causing infinite loop
+      // The cache staleness check is sufficient
+      
       setIsLoadingFile(true);
-      markPendingUpdate(selectedFile.id);
 
       try {
         // 🚀 STEP 1: Check cache FIRST (from real-time updates)
@@ -142,7 +138,6 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
         if (cached && hasFreshCache(selectedFile.id)) {
           console.log(`� Using cached content for ${selectedFile.name} (v${cached.version}, ${cached.content?.length || 0} chars)`);
           setEditorValue(cached.content || '');
-          clearPendingUpdate(selectedFile.id);
           setIsLoadingFile(false);
           return;
         }
@@ -220,15 +215,12 @@ const UnifiedMonacoEditor = ({ selectedFile, roomid, projectFiles = [] }) => {
         
         setEditorValue(`// Error loading ${selectedFile.name}\n// ${error.message}\n\n// Check console for details`);
       } finally {
-        clearPendingUpdate(selectedFile.id);
         setIsLoadingFile(false);
       }
     };
-    
-    loadFileContent();
-  }, [selectedFile, getCachedFile, hasFreshCache, updateCache, markPendingUpdate, clearPendingUpdate, hasPendingUpdate]);
 
-  const handleEditorChange = (value) => {
+    loadFileContent();
+  }, [selectedFile, getCachedFile, hasFreshCache, updateCache]);  const handleEditorChange = (value) => {
     setEditorValue(value || "");
     
     // Update cache with new content (optimistic update)
